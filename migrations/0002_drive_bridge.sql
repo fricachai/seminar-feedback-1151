@@ -1,0 +1,3 @@
+ALTER TABLE papers ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'asset';
+ALTER TABLE papers ADD COLUMN drive_file_id TEXT;
+CREATE TABLE sync_locks (id INTEGER PRIMARY KEY, owner TEXT NOT NULL, expires_at INTEGER NOT NULL);

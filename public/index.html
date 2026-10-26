@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#234d43">
+  <meta name="description" content="專題討論（1）課程文章閱讀與同儕回饋空間。">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>專題討論（1）・共學筆記</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳至主要內容</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="專題討論共學筆記首頁">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 7c5-1 8 0 11 3 3-3 6-4 11-3v18c-5-1-8 0-11 3-3-3-6-4-11-3zM16 10v18M9 12l3 1m-3 4 3 1m8-5 3-1m-3 6 3-1"/></svg></span>
+        <span><strong>專題討論（1）</strong><span class="brand-subtitle">文章閱讀與同儕回饋</span></span>
+      </a>
+      <div class="header-meta"><span class="semester">115 學年度・第 1 學期</span><button id="logout" class="text-button" type="button" hidden>離開課程 <span aria-hidden="true">↗</span></button></div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <section id="gate" class="entry-layout" aria-labelledby="entry-title">
+        <div class="entry-copy">
+          <p class="eyebrow"><span></span> SEMINAR &amp; SHARED LEARNING</p>
+          <h1 id="entry-title">讓每一次聆聽，<br>都有值得留下的<span class="serif-accent">回饋。</span></h1>
+          <p class="entry-description">閱讀一篇文章，理解一個觀點。<br>在同學的分享之後，留下你的觀察、提問與建議。</p>
+          <form id="login-form" class="login-card">
+            <div class="login-heading"><span class="small-icon" aria-hidden="true">↳</span><h2>進入課程共學空間</h2></div>
+            <label for="class-code">課程通關碼</label>
+            <div class="code-row"><input id="class-code" name="code" type="password" autocomplete="off" placeholder="請輸入老師提供的通關碼" required maxlength="100" aria-describedby="login-status"><button id="login-button" type="submit" class="primary-button">進入課程 <span aria-hidden="true">→</span></button></div>
+            <p id="login-status" class="field-note" role="status" aria-live="polite">僅供本課程同學使用，請妥善保管通關碼。</p>
+          </form>
+          <p class="entry-footnote"><span class="tiny-dot"></span> 文章閱讀 <span aria-hidden="true">／</span> 專注聆聽 <span aria-hidden="true">／</span> 具體回饋</p>
+        </div>
+        <div class="entry-art" aria-hidden="true">
+          <div class="art-grid"></div><div class="art-circle circle-one"></div><div class="art-circle circle-two"></div>
+          <span class="art-label">A SPACE FOR THOUGHTFUL EXCHANGE</span>
+          <div class="paper-stack paper-back"></div>
+          <div class="paper-stack paper-front"><div class="paper-topline"><span>READ. REFLECT. RESPOND.</span><span>01</span></div><div class="paper-book"><svg viewBox="0 0 160 120"><path d="M80 104C59 90 39 88 14 92V16c26-4 46 0 66 15 20-15 40-19 66-15v76c-25-4-45-2-66 12zM80 31v73M29 33c13-1 25 2 36 8M29 47c13-1 25 2 36 8M29 61c13-1 25 2 36 8m30-28c11-6 23-9 36-8m-36 22c11-6 23-9 36-8m-36 22c11-6 23-9 36-8"/></svg></div><p>好的討論，<br>從理解彼此開始。</p><div class="paper-lines"><i></i><i></i><i></i></div><span class="paper-bottom">專題討論（1）・共學筆記</span></div>
+          <div class="art-note"><span class="note-star">✳</span><span>每一個觀點<br>都能成為思考的起點</span></div><span class="art-caption">LEARNING, TOGETHER.</span>
+        </div>
+      </section>
+
+      <div id="classroom" hidden>
+        <section class="classroom-intro" aria-labelledby="classroom-title">
+          <div><p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p><h1 id="classroom-title">聆聽之後，<span class="serif-accent">留下你的觀點。</span></h1><p class="intro-description">選擇今天的報告同學，閱讀文章，寫下具體而友善的建議。</p></div>
+          <div class="intro-seal" aria-hidden="true"><span>READ</span><span>REFLECT</span><span>RESPOND <i>↗</i></span></div>
+        </section>
+        <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存我的建議</li></ol>
+        <div id="global-status" class="global-status" role="status" aria-live="polite" hidden></div>
+        <div class="classroom-bottom catalog-toolbar"><span id="catalog-status">正在讀取課程資料…</span><button id="refresh-catalog" class="text-button" type="button">更新雲端文章 <span aria-hidden="true">↻</span></button></div>
+        <div class="workspace">
+          <section class="panel presenter-panel" aria-labelledby="presenter-heading">
+            <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">THE PRESENTATION</p><h2 id="presenter-heading">今天，聽誰分享？</h2></div></div>
+            <label for="presenter">報告同學</label>
+            <div class="select-wrap"><select id="presenter" aria-describedby="presenter-help"><option value="">請選擇報告者的學號與姓名</option></select></div>
+            <p class="field-note" id="presenter-help">選擇後，即可查看這位同學上傳的文章。</p>
+            <div class="article-divider"><span>本次報告文章</span><i></i></div>
+            <div id="article-area" class="article-area" aria-live="polite"><div class="article-placeholder"><span class="outline-book" aria-hidden="true">▤</span><h3>等待一場知識的分享</h3><p>請先選擇報告同學，<br>文章篇名與 PDF 會顯示在這裡。</p></div></div>
+            <div class="reading-note"><span aria-hidden="true">↗</span><p>先掌握研究問題與主要發現，<br>再把你的觀察，化為具體的回饋。</p></div>
+          </section>
+
+          <section class="panel feedback-panel" aria-labelledby="feedback-heading">
+            <div class="panel-heading"><span class="section-number">02</span><div><p class="section-kicker">YOUR PERSPECTIVE</p><h2 id="feedback-heading">讓建議，成為進步的線索。</h2></div><span id="save-badge" class="save-badge">尚未開始</span></div>
+            <label for="reviewer">我是誰 <span class="label-aside">請選擇你自己的學號與姓名</span></label>
+            <div class="select-wrap"><select id="reviewer"><option value="">請選擇填寫者的學號與姓名</option></select></div>
+            <div class="writing-heading"><label for="suggestion">我的建議</label><span id="word-count">0 / 5,000</span></div>
+            <div class="editor-wrap"><textarea id="suggestion" maxlength="5000" rows="9" disabled placeholder="你可以從這些方向思考：&#10;&#10;・報告中，哪一個觀點讓你印象深刻？&#10;・研究問題、方法或結果，有哪些值得再釐清？&#10;・對報告內容或表達方式，你有什麼具體建議？" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
+            <div class="feedback-info"><p id="feedback-status" class="field-note" role="status" aria-live="polite">請先選擇報告同學與你自己的身分。</p><button id="reload-feedback" class="text-button" type="button" hidden>重新讀取</button></div>
+            <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">再次選回同一位報告者時，會帶出已儲存的建議。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存我的建議</span></button></div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer class="site-footer"><span>專題討論（1）<span class="footer-divider">／</span>共學筆記</span><span>理解觀點，也讓自己的觀點被好好表達。</span></footer>
+  </div>
+</body>
+</html>

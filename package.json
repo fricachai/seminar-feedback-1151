@@ -1,0 +1,18 @@
+{
+  "name": "seminar-feedback-1151",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "node --check worker/index.js && node --check worker/drive.js && node --check public/app.js && node --check scripts/command.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "deploy": "wrangler deploy",
+    "verify:api": "node scripts/check-api.mjs",
+    "verify:bridge": "node scripts/check-bridge.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.152.0",
+    "@napi-rs/keyring": "1.3.0"
+  }
+}

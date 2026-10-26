@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "seminar-feedback-1151",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-26",
+  "workers_dev": true,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seminar-feedback-1151",
+      "database_id": "f295329d-e52a-4334-b2be-d0d6279574ba",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://fricachai.github.io",
+    "CLASS_ID": "1151-seminar-1"
+  },
+  "observability": { "enabled": false }
+}

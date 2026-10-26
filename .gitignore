@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars*
+.private/
+.private-assets/
+output/
+*.log
+__pycache__/
