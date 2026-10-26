@@ -6,6 +6,18 @@ try { state.token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch { /* Privat
 const dirty = () => $('suggestion').value !== state.original;
 const pairIsValid = () => state.presenter && state.reviewer && state.presenter !== state.reviewer;
 
+function confirmDiscard(text) {
+  const dialog = $('confirm-dialog');
+  if (dialog.open) return Promise.resolve(false);
+  $('confirm-message').textContent = text;
+  dialog.returnValue = 'cancel';
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'continue'), { once: true });
+    dialog.showModal();
+    $('confirm-cancel').focus();
+  });
+}
+
 function storeToken(token) {
   state.token = token;
   try { token ? sessionStorage.setItem(TOKEN_KEY, token) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* In-memory fallback. */ }
@@ -65,7 +77,7 @@ function updateControls() {
   $('presenter').disabled = state.saving || state.loading;
   $('reviewer').disabled = state.saving || state.loading;
   $('refresh-catalog').disabled = state.saving || state.loading;
-  $('logout').disabled = state.saving;
+  $('logout').disabled = state.saving || state.loading;
   if (state.saving) setBadge('儲存中…');
   else if (state.ready && dirty()) setBadge('尚未儲存', 'dirty');
   else if (state.ready && state.revision > 0) setBadge('已儲存', 'saved');
@@ -205,7 +217,12 @@ $('login-form').addEventListener('submit', async event => {
 for (const id of ['presenter', 'reviewer']) {
   $(id).addEventListener('change', async () => {
     const next = $(id).value;
-    if (dirty() && !confirm('目前的建議尚未儲存。要放棄這些修改並切換同學嗎？')) { $(id).value = state[id]; return; }
+    if (dirty()) {
+      // Keep the visible identity matched to the retained text while confirmation is open.
+      $(id).value = state[id];
+      if (!await confirmDiscard('目前的建議尚未儲存。返回後可繼續填寫並儲存；選擇放棄修改，才會切換到另一位同學。')) return;
+      $(id).value = next;
+    }
     state[id] = next;
     globalStatus(); renderArticles(); await loadPair();
   });
@@ -241,7 +258,7 @@ $('save').addEventListener('click', async () => {
 });
 
 $('reload-feedback').addEventListener('click', async () => {
-  if (dirty() && !confirm('重新讀取會以資料庫內容取代目前文字。請先複製保留修改，確定要繼續嗎？')) return;
+  if (dirty() && !await confirmDiscard('重新讀取會以資料庫內容取代目前文字。請先複製保留需要的修改，再選擇是否繼續。')) return;
   await loadPair();
 });
 
@@ -260,7 +277,7 @@ $('refresh-catalog').addEventListener('click', async () => {
 });
 
 $('logout').addEventListener('click', async () => {
-  if (dirty() && !confirm('建議尚未儲存，確定要放棄修改並離開課程嗎？')) return;
+  if (dirty() && !await confirmDiscard('建議尚未儲存。返回後可先完成儲存；選擇放棄修改，才會離開課程。')) return;
   state.controller?.abort(); state.loadSeq++;
   let logoutFailed = false;
   try { await api('/api/session', { method: 'DELETE' }); } catch { logoutFailed = true; }

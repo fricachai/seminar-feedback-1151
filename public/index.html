@@ -80,5 +80,13 @@
     </main>
     <footer class="site-footer"><span>專題討論（1）<span class="footer-divider">／</span>共學筆記</span><span>理解觀點，也讓自己的觀點被好好表達。</span></footer>
   </div>
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog">
+      <p class="eyebrow">BEFORE YOU CONTINUE</p>
+      <h2 id="confirm-title">保留這份尚未儲存的修改？</h2>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions"><button id="confirm-cancel" class="secondary-button" value="cancel" autofocus>返回繼續填寫</button><button id="confirm-continue" class="primary-button" value="continue">放棄修改並繼續</button></div>
+    </form>
+  </dialog>
 </body>
 </html>
