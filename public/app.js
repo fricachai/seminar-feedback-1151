@@ -5,18 +5,28 @@ const state = { token: '', students: [], presenter: '', reviewer: '', original: 
 try { state.token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch { /* Private browsing may restrict storage; the in-memory session still works. */ }
 const dirty = () => $('suggestion').value !== state.original;
 const pairIsValid = () => state.presenter && state.reviewer && state.presenter !== state.reviewer;
+let discardResolver = null;
 
 function confirmDiscard(text) {
   const dialog = $('confirm-dialog');
   if (dialog.open) return Promise.resolve(false);
   $('confirm-message').textContent = text;
-  dialog.returnValue = 'cancel';
   return new Promise(resolve => {
-    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'continue'), { once: true });
+    discardResolver = resolve;
     dialog.showModal();
     $('confirm-cancel').focus();
   });
 }
+
+function resolveDiscard(approved) {
+  const resolve = discardResolver;
+  discardResolver = null;
+  $('confirm-dialog').close();
+  resolve?.(approved);
+}
+$('confirm-cancel').addEventListener('click', () => resolveDiscard(false));
+$('confirm-continue').addEventListener('click', () => resolveDiscard(true));
+$('confirm-dialog').addEventListener('cancel', event => { event.preventDefault(); resolveDiscard(false); });
 
 function storeToken(token) {
   state.token = token;
