@@ -1,6 +1,6 @@
 # 本次檢索與 instruction lock
 
-日期：2026-10-26。狀態：PASS（來源已可達；部署與功能尚待實測）。
+日期：2026-10-26。狀態：PASS。正式發布與適用功能驗收已完成，證據見 `OPENCODE_HANDOFF.md` 與 ignored `output/` 驗收檔。
 
 ## 範圍
 

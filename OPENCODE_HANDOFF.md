@@ -1,6 +1,8 @@
 # 專題討論（1）網站交接
 
-更新日期：2026-10-26。狀態：RELEASE_IN_PROGRESS。
+更新日期：2026-10-26。狀態：DELIVERED。`HANDOFF_READY=true`。
+
+正式網站：<https://fricachai.github.io/seminar-feedback-1151/>
 
 ## 來源、範圍與 instruction lock
 
@@ -19,13 +21,39 @@
 - 本機及正式 API 各 14 項整合測試已通過；涵蓋配對隔離、儲存讀回、更新衝突、通關、CORS、內容限制、PDF、登出及到期。測試使用假學生，結束後清除。
 - PDF 網頁按鈕曾成功開啟 Chrome 另存新檔視窗；該次 UI 存檔流程未完成。瀏覽器原生操作因無法確認網址而停止，不等於 API 或 PDF 內容失敗。
 
-## 目前發布工作
+## 發布與最後驗收
 
 - GitHub 儲存庫：`https://github.com/fricachai/seminar-feedback-1151`。
-- 待本輪推送、啟用 Pages、確認 Actions、比對線上檔案與完成線上 UI 驗收後更新狀態。
+- 程式已推送至 main。GitHub Pages workflow `40299535048` 成功，功能版本 commit `e4857470dbbbf057d6ee9481d6a48ac7fedf8b27`。
+- 已逐一比對正式網站 `index.html`、`app.js`、`styles.css`、`config.js`、`favicon.svg`：HTTP 200、SHA-256 與提交來源一致。讀回證據在 ignored `output/published-verification.json`。
+- 正式瀏覽器實測：錯誤通關碼拒絕、正確通關載入、單一更新按鈕實讀雲端、建議儲存／不同配對隔離／帶回、禁止自填、未上傳顯示且無下載連結、取消切換保留身分與文字、確認放棄後切換並清空：PASS。
+- 確認流程使用頁面內視窗，由按鈕明確回傳決策，避免原生 confirm 阻塞瀏覽器驗收。前端資源已加版本參數 `1.0.2`。
+- 正式與本機驗收用假學生及其建議均已清除；正式唯讀查詢確認 `active_students=35`、`test_students=0`、`test_feedback=0`；瀏覽器選單再次確認 35 位且無假學生。
+- 桌機畫面已保存及檢視；CSS 寬度 390 的手機版檢核無水平溢位。手機截圖因瀏覽器擷取逾時為 NOT_PERFORMED，不宣稱手機截圖視覺驗收通過。已恢復瀏覽器原尺寸。
 - 本機私有檔及通關碼、密鑰、PDF、截圖均不得提交。`scripts/audit-release.mjs` 以實際私有基準掃描待提交檔案，只輸出計數。
 - 正式前端只發布 `public/`；Worker 變更另由 Wrangler 部署，密鑰保存在 Cloudflare secret。
 - 課程同學自行選身分，不能宣稱個別帳號身分認證。沒有成績計算、教師後台或建議公開列表。
+
+## 來源至成果驗收
+
+| 需求 | 成果及驗證 |
+|---|---|
+| 與修課名單一致的兩份選單 | 雲端名單與原 xlsx 核對；35 位；已讀回正式頁面 |
+| 篇名及 PDF | 6 份文章首頁核對；雲端下載雜湊與原始檔一致；網頁啟動瀏覽器下載 |
+| 未上傳提示 | 正式頁面顯示「尚未上傳」，連結數為 0 |
+| 建議新增、更新、帶回 | D1 配對主鍵及版本檢核；本機／正式各 14 項測試；正式 UI 實測 |
+| 單頁、單一雲端更新 | 正式按鈕讀回 6 位／6 份 PDF，保留建議 |
+| 質感及可讀版面 | 暖白／墨綠／霧金；桌機視覺與手機 DOM 排版檢核 |
+| GitHub 推送及實際發布 | main、Actions 成功、5 份正式檔案逐一比對 |
+| 個資與密鑰邊界 | 發布稽核 72 個實際私有值，0 發現；來源資料、PDF、通關碼與截圖未提交 |
+
+## 日常維護
+
+- 學生新增文章：按正式網站「更新雲端文章」，不需本機同步或電腦保持開機。
+- 前端變更：修改 `public/` 後依檢查流程提交、推送；Actions 自動發布。
+- Worker 變更：另外執行 Wrangler 部署；不要把 Cloudflare secret 值寫回檔案。
+- 課程通關碼只在本機 ignored `.private/classroom-access.txt` 供老師查看。共享碼不是學生獨立帳號。
+- 可重用的實作與維護知識已寫入本專案 README／交接；不把課程資料或測試帳號寫入跨專案 Obsidian。
 
 ## 檢索
 
