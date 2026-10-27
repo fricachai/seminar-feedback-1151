@@ -2,7 +2,7 @@
 
 ## 2026-10-27｜學習入口與文章／簡報上傳頁
 
-狀態：`LOCAL_IMPLEMENTED_PENDING_REMOTE`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
+狀態：`DELIVERED`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
 
 - 使用者需求：登入後第一個畫面提供兩個超連結，分別前往「上傳報告 paper 與簡報」及既有「01 選擇報告者／02 確認填寫身分／03 儲存我的建議」頁；後者不再保留舊的上傳簡報區塊。
 - 上傳頁順序：先選自己的學號與姓名；選好後啟動雲端文章／簡報更新，並列出該生已上傳的文章名稱與簡報檔名。
@@ -12,7 +12,7 @@
 - 實讀：根目錄與 `seminar-feedback/OPENCODE_HANDOFF.md`、`README.md`、`task_retrieval.md`；`worker/`、`public/`、`migrations/`、`tests/`、`google-apps-script/`；Obsidian `Codex操作累積/Google表單-AppsScript建立與跳題SOP.md` 的課程網站串接與自建上傳節。
 - 明確排除：不改原 Google 表單、不改來源 PDF、不做成績或教師後台、不使用 ChatGPT Sites、不把學生名單／通關碼／密鑰寫入公開 Git 或日誌。
 - 設計決策：文章檔名由前端與伺服器雙重驗證，不提供任意檔名覆寫；`papers` 新增 nullable `filename` 以顯示實際上傳檔名；既有文章仍以 `title` 顯示篇名。上傳頁的「年_篇名」使用全形／半形底線皆可，伺服器正規化為半形 `_` 與小寫 `.pdf`。
-- 驗證：`npm run check`、27 項本機測試（雲端同步跳過）、本機 D1 `0004`、假資料瀏覽器流程、桌機與 390 CSS 幾何。正式部署、正式 Drive 上傳、正式手機截圖與原生另存皆尚未完成，不宣稱通過。
+- 驗證：`npm run check`、27 項本機測試（雲端同步跳過）、本機 D1 `0004`、假資料瀏覽器流程、桌機與 390 CSS 幾何。正式上線後已完成 Google 橋接版本 3、正式 D1 `0004`、Worker `1.2.0`、Pages workflow `40537587194`、正式文章上傳／下載雜湊與精確清理；正式手機截圖與原生另存仍未核驗，不宣稱通過。
 
 ## 2026-10-27｜簡報上傳與下載
 

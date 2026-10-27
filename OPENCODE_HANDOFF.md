@@ -1,41 +1,36 @@
 # 專題討論（1）網站交接
 
-## 2026-10-27｜學習入口、文章與簡報上傳頁（本機完成，尚未部署）
+## 2026-10-27｜學習入口、文章與簡報上傳頁（已上線）
 
-狀態：`LOCAL_IMPLEMENTED_PENDING_REMOTE`。`HANDOFF_READY=true`。本輪只完成本機程式、遷移與測試，**尚未**部署 Google 橋接、正式 D1 遷移、Worker 或 Pages，也尚未做正式 Drive 文章上傳端到端驗收。
+狀態：`DELIVERED`。`HANDOFF_READY=true`。正式網站已更新，程式、Google 橋接、正式 D1 遷移、Worker 與 Pages 均已上線並完成正式文章上傳／下載與清理。
 
 - 登入後第一個畫面改為學習入口，提供兩個超連結：「上傳報告文章與簡報」與「閱讀文章與填寫建議」。原有「01 選擇報告者／02 確認填寫身分／03 儲存我的建議」移至獨立檢視；該檢視右上角舊的上傳簡報區塊已移除。
 - 新增上傳檢視：先選「請選擇自己的學號與姓名」，選好後實際呼叫 `/api/sync` 更新雲端資料，並分別列出該生已上傳的文章檔名與簡報檔名。文章與簡報可只傳一項或同時送出。
 - 文章限 PDF、5 MB；檔名強制為「年份_篇名.pdf」，前端、Worker 與 Apps Script 三層驗證。簡報維持 PPT／PPTX／PDF、5 MB，伺服器以選取學號命名。兩者都存入「學號 姓名」資料夾，原檔保留。
 - 後端新增 `POST /api/papers`、`worker/papers.js`、Drive 橋接 `upload-paper` op；`papers` 表新增 nullable `filename`（migration `0004_paper_filename.sql`），供上傳頁顯示實際檔名。既有文章與建議不受影響。
-- 版本已升為 `1.2.0`：`package.json`、Worker `/api/health`、前端資源查詢參數同步更新。
+- 版本 `1.2.0`：`package.json`、Worker `/api/health`、前端資源查詢參數同步更新。
 
-### 本輪已驗證
+### 正式上線與驗證
 
-- `npm run check`：通過（含新增 `worker/papers.js`）。
-- `SEMINAR_TEST_SKIP_SYNC=1 npm test`：**27／27 通過**；新增文章命名、5 MB 邊界、非 PDF 拒絕、Drive 建夾／重試去重、文章與簡報分流、簽章防竄改、未通關拒絕。
-- 本機 D1 已套用 `0001`～`0004`；以實際 SQL 插入／讀回／刪除假文章驗證 `filename` 欄位與 `source_kind='drive'`。
-- 以 Node 假 D1／假 fetch 驗證 `uploadPaper`：索引成功、8 個綁定值、含 `filename`、同步鎖清理。
-- 以本機預覽＋假 API 實測：學習入口兩個連結、上傳頁身分選擇後更新並列出既有文章／簡報、文章＋簡報同時送出、只送文章、只送簡報、非法文章檔名拒絕、未儲存檔案切換確認、建議頁切換與儲存／讀回、登入後固定回學習入口。桌機 1440 與 CSS 390 寬度均無水平溢位。
-- 截圖只使用假學生與假檔名，存放於 ignored `output/design-*.png`；未讀取正式名單、PDF、通關碼或 `.dev.vars`。
+- Google 橋接沿原部署更新至版本 3；catalog 讀回 35 位學生、6 份文章，名單與原始基準一致。Apps Script API 已由使用者帳號啟用。
+- 正式 D1 已套用 `0004_paper_filename.sql`；上線後讀回 `students=35`、`papers=6`、`presentations=0`、`feedback=0`、測試學生 0。
+- Worker `1.2.0` 已部署，版本 ID `5cf977e1-925f-457c-8ef8-92199611439f`；`/api/health` 回 `1.2.0`。
+- 前端 commit `1da1eec6bb5ccb867dede59059f90beecf7d8a31` 已推送 `main`；Pages workflow `40537587194` 成功。
+- 正式站 `index.html`、`app.js`、`config.js`、`favicon.svg` 與提交內容 SHA-256 一致；`styles.css` 僅結尾 CRLF／LF 差異，內容相同。
+- 正式登入後學習入口、兩個連結、上傳頁身分選擇觸發雲端更新、回饋頁 journey 與「無舊上傳區塊」均已讀回；390 CSS 幾何無水平溢位。
+- 正式文章端到端：以 `2099_上線測試文章.pdf`（192 bytes）上傳成功，`papers` 索引出現且下載回 HTTP 200、`application/pdf`、`%PDF-` 開頭、SHA-256 與本機測試檔一致。
+- 清理：測試文章已移至 Google Drive 垃圾桶、D1 測試列已刪除、臨時工作階段已刪除；重新同步後 `students=35`、`papers=6`、`presentations=0`、`feedback=0`、測試列 0。若該生原先沒有資料夾，測試可能留下一個空學生資料夾；未刪除以避免誤刪學生資料。
+- 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` 27／27 通過；`audit-release` 36 個追蹤檔、72 個私有值、0 發現。
+- 截圖只使用假學生與假檔名，存放於 ignored `output/design-*.png`；未讀取或輸出正式學生姓名、通關碼或 `.dev.vars`。
 
-### 尚未完成／待部署（不可宣稱已上線）
+### 尚未完成／限制
 
-1. Google Apps Script `Code.gs` 尚未重新部署；`upload-paper` op 需先上線。
-2. 正式 D1 尚未套用 `0004_paper_filename.sql`；未套用前新 Worker 的 catalog 查詢會失敗。
-3. Worker `1.2.0` 尚未部署；Pages 尚未發布。
-4. 正式 Drive 文章上傳、資料夾建立、重試去重、下載雜湊與正式 UI 尚未端到端驗收。
-5. 正式手機截圖與原生另存完成仍未驗；CSS 幾何檢核不等於視覺或原生下載通過。
+1. 正式手機截圖未另存核驗；390 CSS 幾何檢核不等於手機視覺驗收。
+2. 瀏覽器原生另存完成仍未核驗；文章下載以 API 位元組與 SHA-256 驗證。
+3. 簡報上傳本輪未重新做正式端到端（既有 2026-10-27 已驗紀錄保留）；文章上傳已正式驗證。
+4. 測試若原先無學生資料夾，可能留下一個空資料夾；不影響網站與目錄同步。
 
-### 部署順序（必須逐段確認 exit code）
-
-1. 更新並部署 Google 橋接（保留 Script Properties 與原網址），確認 catalog 仍可用。
-2. `npx wrangler d1 migrations apply DB --remote`，確認 `0004` 成功。
-3. `npm run deploy` 部署 Worker，確認 `/api/health` 回 `1.2.0`。
-4. 提交並推送 `public/`，確認 Pages workflow 成功與正式檔案雜湊。
-5. 以正式站假資料或可精確清理的測試物件驗證文章／簡報上傳，結束後精確清理並重新同步。
-
-以下保留先前版本歷史，不代表本輪已部署或已驗收。
+以下保留先前版本歷史。
 
 ## 2026-10-27｜簡報功能續作中
 
