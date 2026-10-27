@@ -4,11 +4,13 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {validatePresentation,MAX_PRESENTATION_BYTES} from '../worker/presentations.js';
+import {validatePaper,MAX_PAPER_BYTES} from '../worker/papers.js';
 import worker from '../worker/index.js';
 
 const student = {id:'99990001',name:'測試同學'};
 const pdf = Buffer.from('%PDF-1.4\nTest presentation\n%%EOF');
 const payload = (bytes=pdf,filename='report.pdf')=>({studentId:student.id,filename,data:bytes.toString('base64'),uploadId:randomUUID()});
+const paperPayload = (bytes=pdf,filename='2024_測試文章.pdf')=>({studentId:student.id,filename,data:bytes.toString('base64'),uploadId:randomUUID()});
 const source = readFileSync(new URL('../google-apps-script/Code.gs',import.meta.url),'utf8');
 function fixture() {
   let sequence=0,createdFolders=0;
@@ -83,4 +85,51 @@ test('未通關不能上傳或下載簡報',async()=>{
   for(const [path,method]of [['/api/presentations','POST'],['/api/presentations/'+'a'.repeat(24),'GET']]) {
     const r=await worker.fetch(new Request('https://example.test'+path,{method}),{},{waitUntil(){}});assert.equal(r.status,401);
   }
+});
+test('文章以「年份_篇名」命名，接受大小寫副檔名並拒絕不合格名稱',()=>{
+  const result=validatePaper(paperPayload(pdf,'2024_綠色行銷對品牌權益的影響.PDF'));
+  assert.equal(result.filename,'2024_綠色行銷對品牌權益的影響.pdf');
+  assert.equal(result.mimeType,'application/pdf');
+  for(const filename of ['綠色行銷.pdf','24_綠色行銷.pdf','2024-.pdf','2024_ .pdf','2024_綠/色.pdf','2024_'+'x'.repeat(151)+'.pdf']){
+    assert.throws(()=>validatePaper(paperPayload(pdf,filename)));
+  }
+  assert.throws(()=>validatePaper({...paperPayload(),studentId:'invalid'}));
+});
+test('文章 5 MB 邊界可上傳；多 1 byte、空檔、非 PDF 拒絕',()=>{
+  const boundary=Buffer.alloc(MAX_PAPER_BYTES,32);pdf.copy(boundary);
+  assert.equal(validatePaper(paperPayload(boundary)).byteSize,MAX_PAPER_BYTES);
+  for(const p of [paperPayload(Buffer.concat([boundary,Buffer.from('x')])),paperPayload(Buffer.alloc(0)),paperPayload(Buffer.from('not pdf'))])assert.throws(()=>validatePaper(p));
+});
+test('雲端文章上傳建立資料夾、重試去重，並與簡報分流',()=>{
+  const f=fixture(),p=validatePaper(paperPayload());
+  const first=f.context.uploadPaper_(f.root,[student],p);
+  const second=f.context.uploadPaper_(f.root,[student],p);
+  assert.equal(f.createdFolders,1);assert.equal(f.folders[0].getName(),`${student.id} ${student.name}`);
+  assert.equal(first.paper.driveFileId,second.paper.driveFileId);assert.equal(f.folders[0].files.length,1);
+  assert.equal(first.paper.filename,'2024_測試文章.pdf');
+  const catalog=f.context.catalog_(f.root,[student]);
+  assert.equal(catalog.papers.length,1);assert.equal(catalog.papers[0].filename,'2024_測試文章.pdf');
+  assert.equal(catalog.papers[0].title,'測試文章');assert.equal(catalog.presentations.length,0);
+  f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
+  const mixed=f.context.catalog_(f.root,[student]);
+  assert.equal(mixed.papers.length,1);assert.equal(mixed.presentations.length,1);
+});
+test('Google 端獨立拒絕文章超限、空白篇名、冒用學生與重複身分資料夾',()=>{
+  const f=fixture(),p=validatePaper(paperPayload());
+  assert.throws(()=>f.context.uploadPaper_(f.root,[],p));
+  assert.throws(()=>f.context.uploadPaper_(f.root,[student],{...p,filename:'2024_ .pdf'}));
+  assert.throws(()=>f.context.uploadPaper_(f.root,[student],{...p,byteSize:MAX_PAPER_BYTES+1,data:Buffer.alloc(MAX_PAPER_BYTES+1).toString('base64')}));
+  f.addFolder(`${student.id} ${student.name}`);f.addFolder(`${student.id} ${student.name}`);
+  assert.throws(()=>f.context.uploadPaper_(f.root,[student],p));
+});
+test('文章簽章綁定上傳內容，拒絕遭竄改 payload',()=>{
+  const f=fixture(),p=validatePaper(paperPayload()),timestamp=Date.now(),nonce='b'.repeat(32),secret='unit-test-only';
+  const hash=createHash('sha256').update(JSON.stringify(p)).digest('hex');
+  const signature=createHmac('sha256',secret).update([timestamp,'upload-paper','',nonce,hash].join(':')).digest('hex');
+  const r={op:'upload-paper',fileId:'',timestamp,nonce,payload:p,signature};
+  assert.equal(f.context.verifyRequest_({...r,payload:{...p,filename:'2024_遭竄改.pdf'}},secret),false);
+  assert.equal(f.context.verifyRequest_(r,secret),true);assert.equal(f.context.verifyRequest_(r,secret),false);
+});
+test('未通關不能上傳文章',async()=>{
+  const r=await worker.fetch(new Request('https://example.test/api/papers',{method:'POST'}),{},{waitUntil(){}});assert.equal(r.status,401);
 });

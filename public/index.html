@@ -9,9 +9,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>專題討論（1）・共學筆記</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=1.1.0">
-  <script src="config.js?v=1.1.0" defer></script>
-  <script src="app.js?v=1.1.0" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.2.0">
+  <script src="config.js?v=1.2.0" defer></script>
+  <script src="app.js?v=1.2.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要內容</a>
@@ -48,22 +48,79 @@
       </section>
 
       <div id="classroom" hidden>
-        <section class="classroom-intro" aria-labelledby="classroom-title">
-          <div><p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p><h1 id="classroom-title">聆聽之後，<span class="serif-accent">留下你的觀點。</span></h1><p class="intro-description">選擇今天的報告同學，閱讀文章，寫下具體而友善的建議。</p></div>
-          <form id="upload-form" class="upload-form" aria-label="上傳報告簡報">
-            <div class="upload-row">
-              <div class="upload-file-wrap"><label for="presentation-file" class="upload-file-label">上傳報告簡報 <span aria-hidden="true">↑</span></label><input id="presentation-file" type="file" accept=".ppt,.pptx,.pdf" required aria-describedby="upload-help upload-status"><span id="upload-filename" class="upload-filename">尚未選擇檔案</span></div>
-              <div class="upload-identity"><label for="uploader">自己的學號與姓名</label><div class="select-wrap"><select id="uploader" required><option value="">請選擇自己的學號與姓名</option></select></div></div>
-              <button id="upload-submit" class="primary-button" type="submit" disabled>送出 <span aria-hidden="true">→</span></button>
-            </div>
-            <p id="upload-help" class="field-note">請以學號作為檔案名稱（例：12345678.pptx）。限 PPT、PPTX 或 PDF，每個檔案不可超過 5 MB。</p>
-            <p id="upload-status" class="field-note" role="status" aria-live="polite">選擇檔案與自己的身分後，按「送出」上傳。</p>
-          </form>
+        <section id="view-home" class="view home-view" aria-labelledby="home-title">
+          <div class="home-heading">
+            <p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p>
+            <h1 id="home-title">今天，想先做哪一件事？</h1>
+            <p class="intro-description">選擇自己的學號與姓名，準備報告文章與簡報；或先閱讀同學的文章，留下具體而友善的建議。</p>
+          </div>
+          <nav class="home-links" aria-label="課程功能">
+            <a class="home-card" href="#upload">
+              <span class="home-card-number">01</span>
+              <span class="section-kicker">UPLOAD YOUR MATERIALS</span>
+              <h2>上傳報告文章與簡報</h2>
+              <p>選擇自己的學號與姓名，上傳 PDF 文章與 PPT／PDF 簡報。可只上傳一項，也可兩項一起送出。</p>
+              <span class="home-card-action">前往上傳 <span aria-hidden="true">→</span></span>
+            </a>
+            <a class="home-card" href="#feedback">
+              <span class="home-card-number">02</span>
+              <span class="section-kicker">READ &amp; RESPOND</span>
+              <h2>閱讀文章與填寫建議</h2>
+              <p>選擇報告同學，下載文章與簡報，寫下你的觀察、提問與具體建議。</p>
+              <span class="home-card-action">前往閱讀與回饋 <span aria-hidden="true">→</span></span>
+            </a>
+          </nav>
+          <p class="home-footnote"><span class="tiny-dot"></span> 文章閱讀 <span aria-hidden="true">／</span> 專注聆聽 <span aria-hidden="true">／</span> 具體回饋</p>
         </section>
-        <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存我的建議</li></ol>
-        <div id="global-status" class="global-status" role="status" aria-live="polite" hidden></div>
-        <div class="classroom-bottom catalog-toolbar"><span id="catalog-status">正在讀取課程資料…</span><button id="refresh-catalog" class="text-button" type="button">更新雲端文章 <span aria-hidden="true">↻</span></button></div>
-        <div class="workspace">
+
+        <section id="view-upload" class="view upload-view" hidden aria-labelledby="upload-title">
+          <div class="view-heading">
+            <a class="text-button back-link" href="#home"><span aria-hidden="true">←</span> 返回學習入口</a>
+            <p class="eyebrow"><span></span> UPLOAD YOUR MATERIALS</p>
+            <h1 id="upload-title">上傳報告文章與簡報</h1>
+            <p class="intro-description">先選擇自己的學號與姓名。文章與簡報可只上傳一項，也可兩項一起送出；選好身分後，會自動更新雲端資料並顯示目前已上傳的內容。</p>
+          </div>
+          <section class="panel material-panel" aria-labelledby="material-heading">
+            <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">YOUR MATERIALS</p><h2 id="material-heading">選擇身分與檔案</h2></div></div>
+            <form id="material-form" class="material-form">
+              <div class="material-identity">
+                <label for="uploader">請選擇自己的學號與姓名</label>
+                <div class="select-wrap"><select id="uploader" required><option value="">請選擇自己的學號與姓名</option></select></div>
+                <p id="upload-lookup-status" class="field-note" role="status" aria-live="polite">選擇身分後，會自動更新雲端文章與簡報。</p>
+              </div>
+              <div class="material-grid">
+                <div class="material-field">
+                  <label for="paper-file">報告文章（PDF）</label>
+                  <div class="upload-file-wrap"><label for="paper-file" class="upload-file-label">選擇文章 PDF <span aria-hidden="true">↑</span></label><input id="paper-file" type="file" accept=".pdf" aria-describedby="paper-help paper-status"><span id="paper-filename" class="upload-filename">尚未選擇檔案</span></div>
+                  <p id="paper-help" class="field-note">檔名請用「年份_篇名」，例：2024_綠色行銷對品牌權益的影響。限 PDF，5 MB 以內。</p>
+                  <p id="paper-status" class="field-note" role="status" aria-live="polite"></p>
+                  <div class="upload-existing"><p class="upload-existing-label">目前已上傳文章</p><div id="paper-existing" class="upload-existing-list"><p class="field-note">請先選擇自己的學號與姓名。</p></div></div>
+                </div>
+                <div class="material-field">
+                  <label for="presentation-file">報告簡報（PPT／PPTX／PDF）</label>
+                  <div class="upload-file-wrap"><label for="presentation-file" class="upload-file-label">選擇簡報檔 <span aria-hidden="true">↑</span></label><input id="presentation-file" type="file" accept=".ppt,.pptx,.pdf" aria-describedby="presentation-help presentation-status"><span id="presentation-filename" class="upload-filename">尚未選擇檔案</span></div>
+                  <p id="presentation-help" class="field-note">檔名會自動以學號命名，例：12345678.pptx。限 PPT、PPTX 或 PDF，5 MB 以內。</p>
+                  <p id="presentation-status" class="field-note" role="status" aria-live="polite"></p>
+                  <div class="upload-existing"><p class="upload-existing-label">目前已上傳簡報</p><div id="presentation-existing" class="upload-existing-list"><p class="field-note">請先選擇自己的學號與姓名。</p></div></div>
+                </div>
+              </div>
+              <div class="material-actions">
+                <p id="material-status" class="field-note" role="status" aria-live="polite">可只上傳文章或簡報，也可兩項一起送出。</p>
+                <button id="material-submit" class="primary-button" type="submit" disabled>送出 <span aria-hidden="true">→</span></button>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <section id="view-feedback" class="view feedback-view" hidden aria-labelledby="classroom-title">
+          <div class="view-heading"><a class="text-button back-link" href="#home"><span aria-hidden="true">←</span> 返回學習入口</a></div>
+          <section class="classroom-intro feedback-intro" aria-labelledby="classroom-title">
+            <div><p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p><h1 id="classroom-title">聆聽之後，<span class="serif-accent">留下你的觀點。</span></h1><p class="intro-description">選擇今天的報告同學，閱讀文章，寫下具體而友善的建議。</p></div>
+          </section>
+          <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存我的建議</li></ol>
+          <div id="global-status" class="global-status" role="status" aria-live="polite" hidden></div>
+          <div class="classroom-bottom catalog-toolbar"><span id="catalog-status">正在讀取課程資料…</span><button id="refresh-catalog" class="text-button" type="button">更新雲端文章 <span aria-hidden="true">↻</span></button></div>
+          <div class="workspace">
           <section class="panel presenter-panel" aria-labelledby="presenter-heading">
             <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">THE PRESENTATION</p><h2 id="presenter-heading">今天，聽誰分享？</h2></div></div>
             <label for="presenter">報告同學</label>
@@ -85,7 +142,8 @@
             <div class="feedback-info"><p id="feedback-status" class="field-note" role="status" aria-live="polite">請先選擇報告同學與你自己的身分。</p><button id="reload-feedback" class="text-button" type="button" hidden>重新讀取</button></div>
             <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">再次選回同一位報告者時，會帶出已儲存的建議。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存我的建議</span></button></div>
           </section>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
     <footer class="site-footer"><span>專題討論（1）<span class="footer-divider">／</span>共學筆記</span><span>理解觀點，也讓自己的觀點被好好表達。</span></footer>

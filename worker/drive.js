@@ -18,7 +18,7 @@ async function bridge(env, op, fileId = '', payload = null) {
   });
   if (!response.ok) throw fail(503, '暫時無法連線到 Google 雲端硬碟，請稍後再試。');
   const data = await response.json().catch(() => null);
-  if (!data?.ok) throw fail(503, op === 'upload' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
+  if (!data?.ok) throw fail(503, op === 'upload' || op === 'upload-paper' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
   return data;
 }
 
@@ -42,10 +42,27 @@ function presentationStatement(env, p) {
     .bind(p.id,p.studentId,p.filename,p.mimeType,p.byteSize,p.modifiedAt,p.driveFileId);
 }
 
+function paperStatement(env, p) {
+  return env.DB.prepare(`INSERT INTO papers(id,student_id,title,filename,asset_key,sha256,byte_size,modified_at,title_source,active,source_kind,drive_file_id)
+    VALUES(?,?,?,?,'','',?,?,?,1,'drive',?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,filename=excluded.filename,
+    byte_size=excluded.byte_size,modified_at=excluded.modified_at,title_source=excluded.title_source,
+    active=1,source_kind='drive',drive_file_id=excluded.drive_file_id`)
+    .bind(p.id,p.studentId,p.title,p.filename,p.byteSize,p.modifiedAt,p.titleSource,p.driveFileId);
+}
+
 async function preparePresentation(p, ids) {
   const types = ['application/pdf','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
   if (!p || !ids.has(p.studentId) || !/^[A-Za-z0-9_-]{10,200}$/.test(p.driveFileId || '') || typeof p.filename !== 'string' || p.filename.length > 250 || !/\.(pptx?|pdf)$/i.test(p.filename) || !types.includes(p.mimeType) || !Number.isSafeInteger(p.byteSize) || p.byteSize < 5 || p.byteSize > 5242880 || !Number.isFinite(Date.parse(p.modifiedAt))) throw fail(502,'雲端簡報資訊不完整，未套用更新。');
   return {...p,id:(await sha256(`${p.studentId}:${p.driveFileId}`)).slice(0,24)};
+}
+
+async function preparePaper(p, ids) {
+  if (!p || !ids.has(p.studentId) || !/^[A-Za-z0-9_-]{10,200}$/.test(p.driveFileId || '') ||
+    typeof p.filename !== 'string' || p.filename.length > 200 || !/^\d{4}_.+\.pdf$/i.test(p.filename) ||
+    p.mimeType !== 'application/pdf' || !Number.isSafeInteger(p.byteSize) || p.byteSize < 5 || p.byteSize > 5242880 ||
+    !Number.isFinite(Date.parse(p.modifiedAt)) || typeof p.title !== 'string' || !p.title.trim() || p.title.length > 1000 ||
+    typeof p.titleSource !== 'string' || !p.titleSource) throw fail(502,'雲端文章資訊不完整，未套用更新。');
+  return {...p,title:p.title.trim(),filename:p.filename,id:(await sha256(`${p.studentId}:${p.driveFileId}`)).slice(0,24)};
 }
 
 export async function uploadPresentation(env, payload) {
@@ -56,6 +73,17 @@ export async function uploadPresentation(env, payload) {
     try { await presentationStatement(env,p).run(); }
     catch { return {ok:true,indexed:false,filename:p.filename}; }
     return {ok:true,indexed:true,filename:p.filename};
+  });
+}
+
+export async function uploadPaper(env, payload) {
+  return withCatalogLock(env, async () => {
+    const result = await bridge(env,'upload-paper','',payload);
+    const p = await preparePaper(result.paper,new Set([payload.studentId]));
+    // The file already exists in Drive: indexing failure must never imply the file was not saved.
+    try { await paperStatement(env,p).run(); }
+    catch { return {ok:true,indexed:false,filename:p.filename,title:p.title}; }
+    return {ok:true,indexed:true,filename:p.filename,title:p.title};
   });
 }
 
@@ -78,9 +106,9 @@ export async function refreshCatalog(env) {
     const fileIds = new Set(), prepared = [];
     for (const p of data.papers) {
       const unique = `${p.studentId}:${p.driveFileId}`;
-      if (!ids.has(p.studentId) || !/^[A-Za-z0-9_-]{10,200}$/.test(p.driveFileId || '') || fileIds.has(unique) || typeof p.title !== 'string' || !p.title.trim() || p.title.length > 1000 || !Number.isSafeInteger(p.byteSize) || p.byteSize < 5 || p.byteSize > 10485760 || !Number.isFinite(Date.parse(p.modifiedAt))) throw fail(502, '雲端文章資訊不完整，未取代原有資料。');
+      if (!ids.has(p.studentId) || !/^[A-Za-z0-9_-]{10,200}$/.test(p.driveFileId || '') || fileIds.has(unique) || typeof p.title !== 'string' || !p.title.trim() || p.title.length > 1000 || (p.filename != null && (typeof p.filename !== 'string' || p.filename.length > 200)) || !Number.isSafeInteger(p.byteSize) || p.byteSize < 5 || p.byteSize > 10485760 || !Number.isFinite(Date.parse(p.modifiedAt))) throw fail(502, '雲端文章資訊不完整，未取代原有資料。');
       fileIds.add(unique);
-      prepared.push({...p,id:(await sha256(unique)).slice(0,24)});
+      prepared.push({...p,filename:typeof p.filename === 'string' ? p.filename : null,id:(await sha256(unique)).slice(0,24)});
     }
     const oldPapers = await env.DB.prepare('SELECT id FROM papers WHERE active = 1').all();
     const old = new Set(oldPapers.results.map(p => p.id));
@@ -88,10 +116,11 @@ export async function refreshCatalog(env) {
     const statements = [env.DB.prepare('UPDATE students SET active = 0'),env.DB.prepare('UPDATE papers SET active = 0'),env.DB.prepare('UPDATE presentations SET active = 0')];
     for (const s of data.students) statements.push(env.DB.prepare(`INSERT INTO students(id,name,active) VALUES(?,?,1)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name,active=1`).bind(s.id,s.name.trim()));
-    for (const p of prepared) statements.push(env.DB.prepare(`INSERT INTO papers(id,student_id,title,asset_key,sha256,byte_size,modified_at,title_source,active,source_kind,drive_file_id)
-      VALUES(?,?,?,'','',?,?,?,1,'drive',?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,byte_size=excluded.byte_size,
-      modified_at=excluded.modified_at,title_source=excluded.title_source,active=1,source_kind='drive',drive_file_id=excluded.drive_file_id`)
-      .bind(p.id,p.studentId,p.title,p.byteSize,p.modifiedAt,p.titleSource || 'student_filename',p.driveFileId));
+    for (const p of prepared) statements.push(env.DB.prepare(`INSERT INTO papers(id,student_id,title,filename,asset_key,sha256,byte_size,modified_at,title_source,active,source_kind,drive_file_id)
+      VALUES(?,?,?,?,'','',?,?,?,1,'drive',?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,filename=excluded.filename,
+      byte_size=excluded.byte_size,modified_at=excluded.modified_at,title_source=excluded.title_source,
+      active=1,source_kind='drive',drive_file_id=excluded.drive_file_id`)
+      .bind(p.id,p.studentId,p.title,p.filename,p.byteSize,p.modifiedAt,p.titleSource || 'student_filename',p.driveFileId));
     for (const p of presentations) statements.push(presentationStatement(env,p));
     statements.push(env.DB.prepare("INSERT INTO metadata(key,value) VALUES('synced_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(syncedAt));
     await env.DB.batch(statements);

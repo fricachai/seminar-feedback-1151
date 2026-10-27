@@ -16,6 +16,7 @@ function doPost(e) {
     var students = roster_(props.getProperty('ROSTER_FILE_ID'), root.getId());
     if (request.op === 'catalog') return output_(catalog_(root, students));
     if (request.op === 'upload') return output_(uploadPresentation_(root,students,request.payload));
+    if (request.op === 'upload-paper') return output_(uploadPaper_(root,students,request.payload));
     if (request.op === 'pdf' || request.op === 'presentation') {
       var file = DriveApp.getFileById(request.fileId);
       var parents = file.getParents(), permitted = false;
@@ -44,7 +45,7 @@ function doPost(e) {
 
 function verifyRequest_(r, secret) {
   if (!Number.isFinite(r.timestamp) || Math.abs(Date.now() - r.timestamp) > 120000 || !/^[a-f0-9]{32}$/.test(r.nonce || '') || !/^[a-f0-9]{64}$/.test(r.signature || '')) return false;
-  if (r.op === 'upload' && (!r.payload || typeof r.payload !== 'object')) return false;
+  if ((r.op === 'upload' || r.op === 'upload-paper') && (!r.payload || typeof r.payload !== 'object')) return false;
   var parts = [r.timestamp,r.op,r.fileId || '',r.nonce];
   if (r.payload) parts.push(hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(r.payload),Utilities.Charset.UTF_8)));
   var expected = hex_(Utilities.computeHmacSha256Signature(parts.join(':'), secret));
@@ -61,6 +62,7 @@ function hex_(bytes) { return bytes.map(function(b) { return ('0' + ((b + 256) %
 function output_(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
 
 var PRESENTATION_PREFIX_ = 'seminar-presentation:v1:';
+var PAPER_PREFIX_ = 'seminar-paper:v1:';
 var PRESENTATION_TYPES_ = {
   ppt:'application/vnd.ms-powerpoint',
   pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -73,6 +75,24 @@ function isPresentation_(file) {
 }
 function presentationInfo_(file,studentId) {
   return {driveFileId:file.getId(),studentId:studentId,filename:file.getName(),mimeType:file.getMimeType(),byteSize:file.getSize(),modifiedAt:file.getLastUpdated().toISOString()};
+}
+function paperInfo_(file,student) {
+  var title = articleTitle_(file.getName(), student);
+  return {driveFileId:file.getId(),studentId:student.id,filename:file.getName(),title:title.title,
+    titleSource:title.source,mimeType:file.getMimeType(),byteSize:file.getSize(),modifiedAt:file.getLastUpdated().toISOString()};
+}
+function studentFolder_(root,student) {
+  // Match identity rather than trusting a caller-supplied folder ID. Reuse whitespace variants.
+  var folders = root.getFolders(), folder = null;
+  while (folders.hasNext()) {
+    var candidate = folders.next(), identity = candidate.getName().match(/^(\d{8})\s+(.+)$/);
+    if (identity && identity[1] === student.id && identity[2].trim() === student.name) {
+      if (folder) throw new Error('Ambiguous student folder.');
+      folder = candidate;
+    }
+  }
+  if (!folder) folder = root.createFolder(student.id + ' ' + student.name);
+  return folder;
 }
 function uploadPresentation_(root,students,p) {
   if (!p || !/^\d{8}$/.test(p.studentId || '') || !/^[a-f0-9-]{36}$/.test(p.uploadId || '')) throw new Error('Invalid identity.');
@@ -97,16 +117,7 @@ function uploadPresentation_(root,students,p) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) throw new Error('Upload busy.');
   try {
-    // Match identity rather than trusting a caller-supplied folder ID. Reuse whitespace variants.
-    var folders = root.getFolders(), folder = null;
-    while (folders.hasNext()) {
-      var candidate = folders.next(), identity = candidate.getName().match(/^(\d{8})\s+(.+)$/);
-      if (identity && identity[1] === student.id && identity[2].trim() === student.name) {
-        if (folder) throw new Error('Ambiguous student folder.');
-        folder = candidate;
-      }
-    }
-    if (!folder) folder = root.createFolder(student.id + ' ' + student.name);
+    var folder = studentFolder_(root,student);
     var files = folder.getFiles();
     while (files.hasNext()) {
       var prior = files.next(), description = prior.getDescription() || '';
@@ -120,6 +131,39 @@ function uploadPresentation_(root,students,p) {
     catch (error) { created.setTrashed(true); throw error; }
     // Never overwrite existing article files or previous presentation uploads.
     return {ok:true,presentation:presentationInfo_(created,student.id)};
+  } finally { lock.releaseLock(); }
+}
+function uploadPaper_(root,students,p) {
+  if (!p || !/^\d{8}$/.test(p.studentId || '') || !/^[a-f0-9-]{36}$/.test(p.uploadId || '')) throw new Error('Invalid identity.');
+  var student = students.find(function(s) {return s.id === p.studentId;});
+  var match = String(p.filename || '').match(/^(\d{4})_(.+)\.pdf$/i);
+  if (!student || !match || p.mimeType !== 'application/pdf') throw new Error('Invalid upload.');
+  var title = match[2].trim();
+  var filename = match[1] + '_' + title + '.pdf';
+  if (!title || title.length > 150 || filename.length > 200 || /[\\/:*?"<>|\u0000-\u001f]/.test(filename)) throw new Error('Invalid filename.');
+  if (typeof p.data !== 'string' || p.data.length > 6990508 || p.data.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(p.data)) throw new Error('Invalid size.');
+  var bytes = Utilities.base64Decode(p.data);
+  if (bytes.length < 5 || bytes.length > 5242880 || bytes.length !== p.byteSize) throw new Error('Invalid size.');
+  if (String.fromCharCode.apply(null, bytes.slice(0,5)) !== '%PDF-') throw new Error('Invalid PDF.');
+  var hash = hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes));
+  var marker = PAPER_PREFIX_ + p.uploadId + ':' + hash;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw new Error('Upload busy.');
+  try {
+    var folder = studentFolder_(root,student);
+    var files = folder.getFiles();
+    while (files.hasNext()) {
+      var prior = files.next(), description = prior.getDescription() || '';
+      if (!prior.isTrashed() && description.indexOf(PAPER_PREFIX_ + p.uploadId + ':') === 0) {
+        if (description !== marker || prior.getName() !== filename) throw new Error('Upload ID conflict.');
+        return {ok:true,paper:paperInfo_(prior,student)};
+      }
+    }
+    var created = folder.createFile(Utilities.newBlob(bytes,p.mimeType,filename));
+    try { created.setDescription(marker); }
+    catch (error) { created.setTrashed(true); throw error; }
+    // The uploaded paper is a new file; existing articles and presentations stay untouched.
+    return {ok:true,paper:paperInfo_(created,student)};
   } finally { lock.releaseLock(); }
 }
 
@@ -198,9 +242,7 @@ function catalog_(root, students) {
       }
       if (file.getMimeType() !== MimeType.PDF) continue;
       if (file.getSize() <= 0 || file.getSize() > 10485760) throw new Error('Invalid file size.');
-      var title = articleTitle_(file.getName(), student);
-      papers.push({driveFileId:file.getId(), studentId:student.id, title:title.title,
-        titleSource:title.source, byteSize:file.getSize(), modifiedAt:file.getLastUpdated().toISOString()});
+      papers.push(paperInfo_(file,student));
     }
   }
   return {ok:true, complete:true, students:students, papers:papers, presentations:presentations, fetchedAt:new Date().toISOString()};

@@ -1,5 +1,19 @@
 # 本次檢索與 instruction lock
 
+## 2026-10-27｜學習入口與文章／簡報上傳頁
+
+狀態：`LOCAL_IMPLEMENTED_PENDING_REMOTE`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
+
+- 使用者需求：登入後第一個畫面提供兩個超連結，分別前往「上傳報告 paper 與簡報」及既有「01 選擇報告者／02 確認填寫身分／03 儲存我的建議」頁；後者不再保留舊的上傳簡報區塊。
+- 上傳頁順序：先選自己的學號與姓名；選好後啟動雲端文章／簡報更新，並列出該生已上傳的文章名稱與簡報檔名。
+- 文章：PDF、5 MB 以內、檔名「年份_篇名」；簡報：PPT／PPTX／PDF、5 MB 以內、伺服器以學號命名；可只傳一項或兩項一起送出；沿用「學號 姓名」資料夾與原檔保留原則。
+- 設計沿用原站暖白／墨綠／霧金、Noto Serif TC 標題、既有 panel、journey、primary button 與「尚未上傳」「更新雲端文章」等用詞；回饋頁保留左上標題與說明，只移除右上上傳區塊。
+- 權威來源：當次使用者指示 > 現行原始碼與交接 > Obsidian 已寫回 Google 表單 SOP 的 2026-10-26／2026-10-27 工程節 > 一般背景知識。採用作業邊界：固定課程根資料夾、正式名單、三層格式／容量檢查、HMAC＋nonce、上傳識別碼去重、雲端已存但索引失敗需明示、測試資料精確清理。
+- 實讀：根目錄與 `seminar-feedback/OPENCODE_HANDOFF.md`、`README.md`、`task_retrieval.md`；`worker/`、`public/`、`migrations/`、`tests/`、`google-apps-script/`；Obsidian `Codex操作累積/Google表單-AppsScript建立與跳題SOP.md` 的課程網站串接與自建上傳節。
+- 明確排除：不改原 Google 表單、不改來源 PDF、不做成績或教師後台、不使用 ChatGPT Sites、不把學生名單／通關碼／密鑰寫入公開 Git 或日誌。
+- 設計決策：文章檔名由前端與伺服器雙重驗證，不提供任意檔名覆寫；`papers` 新增 nullable `filename` 以顯示實際上傳檔名；既有文章仍以 `title` 顯示篇名。上傳頁的「年_篇名」使用全形／半形底線皆可，伺服器正規化為半形 `_` 與小寫 `.pdf`。
+- 驗證：`npm run check`、27 項本機測試（雲端同步跳過）、本機 D1 `0004`、假資料瀏覽器流程、桌機與 390 CSS 幾何。正式部署、正式 Drive 上傳、正式手機截圖與原生另存皆尚未完成，不宣稱通過。
+
 ## 2026-10-27｜簡報上傳與下載
 
 狀態：RETRIEVAL_PASS；CURRENT_MODEL=UNVERIFIED、CURRENT_EFFORT=UNVERIFIED，無明確切換收益，維持當前設定。
