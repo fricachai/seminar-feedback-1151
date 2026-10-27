@@ -2,7 +2,7 @@
 
 ## 2026-10-27｜簡報功能續作中
 
-狀態：BACKEND_VERIFIED／PAGES_RELEASE_IN_PROGRESS。使用者已明確同意 Google Drive 讀寫並親自完成 Google 安全提示與授權。頁首選檔＋身分選單＋送出、5 MB 三層限制、學號命名、學生資料夾建立、簡報索引／下載／尚未上傳已完成。
+狀態：DELIVERED。`HANDOFF_READY=true`。使用者已明確同意 Google Drive 讀寫並親自完成 Google 安全提示與授權。頁首選檔＋身分選單＋送出、5 MB 三層限制、學號命名、學生資料夾建立、簡報索引／下載／尚未上傳已上線。
 
 - 橋接第 2 版沿原網址部署，D1 0003 遷移完成；Worker 1.1.0 版本 `865b0573-4d9e-44df-be5c-9bd5b4bb0f78` 已部署。
 - 21 項本機測試再次通過，這次包含真實雲端同步；正式 API 完整核對 35 位名單、6 份文章原始雜湊。
@@ -10,7 +10,10 @@
 - 以原先不存在的正式學生資料夾驗證自動建夾；未在正式名單新增假學生。依上傳識別碼／唯一內容雜湊清除四份測試檔、清理後確實為空的測試資料夾一個；正式重新同步確認 students=35、papers=6、presentations=0。原學生 PDF／表單／已存建議保留。
 - 桌機及 CSS 390 手機畫面已檢視、超限 UI 拒絕已讀回。瀏覽器下載按鈕完成準備且無 UI 錯誤，但 download 事件等待逾時，Downloads 無匹配檔；原生另存完成為 NOT_PERFORMED，四份內容完整性由正式 API 位元組／SHA-256 驗證。
 - 已移除 Google 編輯器暫時診斷／清理函式，讀回與正式原始碼一致；正式第 2 版從未包含測試入口。發布稽核 72 個實際私有值、34 份來源檔，0 發現。
-- 可重用方法寫回既有 Obsidian Google 表單 SOP 的「自建網站直接上傳簡報至 Drive」節；沒有更新外部 Project 或可攜包。下一步：Pages 推送／發布、正式五份資源雜湊與空狀態／桌機手機畫面讀回、最終交接。
+- 前端功能提交 `a08c0271dd70a772112fa35d187019d00fcee6a2` 已推送 main；Pages workflow `40515307809` 成功。正式五份資源 HTTP 200／SHA-256 與提交來源相同；正式通關成功、三份選單各 35 位、上傳區位於標題右側、命名／格式／5 MB 提醒及文章／簡報「尚未上傳」且無下載連結均已讀回。
+- 正式桌機截圖已保存及檢視；正式手機 CSS 390 幾何檢核無水平溢位，手機正式截圖因 Page.captureScreenshot 兩次逾時標為 NOT_PERFORMED。本機同版 CSS 390 手機截圖已成功保存及檢視，不把其描述為正式手機截圖。暫時尺寸已恢復。
+- 可重用方法寫回既有 Obsidian Google 表單 SOP 的「自建網站直接上傳簡報至 Drive」節，frontmatter 2026-10-27、舊節保留及新節讀回均確認；沒有更新外部 Project、可攜包或永久 Codex 記憶。CURRENT_MODEL／CURRENT_EFFORT=UNVERIFIED；必要判斷及發布已完成，短交接讀回無實質切換收益。
+- 本輪證據：ignored `output/upload-verification.json`、`output/upload-cleanup-log.txt`、`output/published-verification.json`、`output/playwright/published-upload-desktop.png`、本機手機截圖及 `.private/api-verification-remote.json`。必要實際流程已完成；原生另存及正式手機截圖的未驗範圍如上，不宣稱全部瀏覽器／原生工具測試通過。
 
 以下為 2026-10-26 已交付版本歷史，唯讀權限描述不代表本次新版本已授權。
 
