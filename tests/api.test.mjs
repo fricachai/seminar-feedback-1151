@@ -28,8 +28,12 @@ async function feedback(presenter=ids[0],reviewer=ids[1]){
 before(async()=>{
  const r=await api('/api/session',{method:'POST',auth:false,body:{code}});assert.equal(r.status,200);
  token=(await r.json()).token;tokenHashes.push(hash(token));
- const sync=await api('/api/sync',{method:'POST'});assert.equal(sync.status,200);
- const stats=await sync.json();assert.equal(stats.students,35);assert.equal(stats.papers,6);
+ if(process.env.SEMINAR_TEST_SKIP_SYNC==='1') {
+  assert.equal(mode,'--local','Only isolated local tests may skip cloud sync.');
+ } else {
+  const sync=await api('/api/sync',{method:'POST'});assert.equal(sync.status,200);
+  const stats=await sync.json();assert.equal(stats.students,35);assert.equal(stats.papers,6);
+ }
  sql("INSERT INTO students(id,name,active) VALUES('99990001','測試同學甲',1),('99990002','測試同學乙',1),('99990003','測試同學丙',1) ON CONFLICT(id) DO UPDATE SET active=1; DELETE FROM feedback WHERE presenter_id IN ('99990001','99990002','99990003') OR reviewer_id IN ('99990001','99990002','99990003');");
  fixtureAdded=true;
 });

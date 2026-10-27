@@ -1,4 +1,5 @@
-import { refreshCatalog, readDrivePdf } from './drive.js';
+import { refreshCatalog, readDrivePdf, uploadPresentation, readDrivePresentation } from './drive.js';
+import { validatePresentation, MAX_PRESENTATION_BYTES } from './presentations.js';
 const encoder = new TextEncoder();
 const SESSION_SECONDS = 12 * 60 * 60;
 const MAX_CONTENT = 5000;
@@ -127,7 +128,7 @@ async function readFeedback(env, presenter, reviewer) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.0.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.1.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -137,18 +138,37 @@ async function route(request, env, ctx) {
     return json({ ok: true });
   }
   if (path === '/api/sync' && request.method === 'POST') return json(await refreshCatalog(env));
+  if (path === '/api/presentations' && request.method === 'POST') {
+    const payload = validatePresentation(await bodyJSON(request, Math.ceil(MAX_PRESENTATION_BYTES / 3) * 4 + 4096));
+    const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(payload.studentId).first();
+    if (!student) throw httpError(400,'學生資料已更新，請重新整理名單。');
+    return json(await uploadPresentation(env,payload));
+  }
   if (path === '/api/catalog' && request.method === 'GET') {
-    const [students, papers, synced] = await env.DB.batch([
+    const [students, papers, synced, presentations] = await env.DB.batch([
       env.DB.prepare('SELECT id, name FROM students WHERE active = 1 ORDER BY id'),
       env.DB.prepare(`SELECT p.id, p.student_id AS studentId, p.title, p.byte_size AS byteSize,
         p.modified_at AS modifiedAt FROM papers p JOIN students s ON s.id = p.student_id
         WHERE p.active = 1 AND s.active = 1 ORDER BY p.modified_at DESC, p.id`),
       env.DB.prepare("SELECT value FROM metadata WHERE key = 'synced_at'"),
+      env.DB.prepare(`SELECT p.id, p.student_id AS studentId, p.filename, p.mime_type AS mimeType, p.byte_size AS byteSize,
+        p.modified_at AS modifiedAt FROM presentations p JOIN students s ON s.id = p.student_id
+        WHERE p.active = 1 AND s.active = 1 ORDER BY p.modified_at DESC, p.id DESC`),
     ]);
     return json({
-      students: students.results.map(s => ({ ...s, papers: papers.results.filter(p => p.studentId === s.id) })),
+      students: students.results.map(s => ({ ...s, papers: papers.results.filter(p => p.studentId === s.id), presentations: presentations.results.filter(p => p.studentId === s.id) })),
       syncedAt: synced.results[0]?.value || null,
     });
+  }
+  const presentationMatch = path.match(/^\/api\/presentations\/([a-f0-9]{24})$/);
+  if (presentationMatch && request.method === 'GET') {
+    const p = await env.DB.prepare(`SELECT p.filename, p.mime_type, p.drive_file_id FROM presentations p JOIN students s ON s.id = p.student_id
+      WHERE p.id = ? AND p.active = 1 AND s.active = 1`).bind(presentationMatch[1]).first();
+    if (!p) throw httpError(404,'找不到這份簡報，請更新雲端資料後再試。');
+    return new Response(await readDrivePresentation(env,p.drive_file_id,p.mime_type), {headers:{
+      'Content-Type':p.mime_type,
+      'Content-Disposition':`attachment; filename="presentation.${p.filename.split('.').pop()}"; filename*=UTF-8''${encodeURIComponent(p.filename).replaceAll("'",'%27')}`,
+    }});
   }
   if (path === '/api/feedback' && request.method === 'GET') {
     const presenter = url.searchParams.get('presenter');

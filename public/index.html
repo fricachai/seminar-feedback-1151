@@ -9,9 +9,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>專題討論（1）・共學筆記</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=1.0.2">
-  <script src="config.js?v=1.0.2" defer></script>
-  <script src="app.js?v=1.0.2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.1.0">
+  <script src="config.js?v=1.1.0" defer></script>
+  <script src="app.js?v=1.1.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要內容</a>
@@ -50,7 +50,15 @@
       <div id="classroom" hidden>
         <section class="classroom-intro" aria-labelledby="classroom-title">
           <div><p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p><h1 id="classroom-title">聆聽之後，<span class="serif-accent">留下你的觀點。</span></h1><p class="intro-description">選擇今天的報告同學，閱讀文章，寫下具體而友善的建議。</p></div>
-          <div class="intro-seal" aria-hidden="true"><span>READ</span><span>REFLECT</span><span>RESPOND <i>↗</i></span></div>
+          <form id="upload-form" class="upload-form" aria-label="上傳報告簡報">
+            <div class="upload-row">
+              <div class="upload-file-wrap"><label for="presentation-file" class="upload-file-label">上傳報告簡報 <span aria-hidden="true">↑</span></label><input id="presentation-file" type="file" accept=".ppt,.pptx,.pdf" required aria-describedby="upload-help upload-status"><span id="upload-filename" class="upload-filename">尚未選擇檔案</span></div>
+              <div class="upload-identity"><label for="uploader">自己的學號與姓名</label><div class="select-wrap"><select id="uploader" required><option value="">請選擇自己的學號與姓名</option></select></div></div>
+              <button id="upload-submit" class="primary-button" type="submit" disabled>送出 <span aria-hidden="true">→</span></button>
+            </div>
+            <p id="upload-help" class="field-note">請以學號作為檔案名稱（例：12345678.pptx）。限 PPT、PPTX 或 PDF，每個檔案不可超過 5 MB。</p>
+            <p id="upload-status" class="field-note" role="status" aria-live="polite">選擇檔案與自己的身分後，按「送出」上傳。</p>
+          </form>
         </section>
         <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存我的建議</li></ol>
         <div id="global-status" class="global-status" role="status" aria-live="polite" hidden></div>
@@ -60,9 +68,11 @@
             <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">THE PRESENTATION</p><h2 id="presenter-heading">今天，聽誰分享？</h2></div></div>
             <label for="presenter">報告同學</label>
             <div class="select-wrap"><select id="presenter" aria-describedby="presenter-help"><option value="">請選擇報告者的學號與姓名</option></select></div>
-            <p class="field-note" id="presenter-help">選擇後，即可查看這位同學上傳的文章。</p>
+            <p class="field-note" id="presenter-help">選擇後，即可下載這位同學的文章與報告簡報。</p>
             <div class="article-divider"><span>本次報告文章</span><i></i></div>
             <div id="article-area" class="article-area" aria-live="polite"><div class="article-placeholder"><span class="outline-book" aria-hidden="true">▤</span><h3>等待一場知識的分享</h3><p>請先選擇報告同學，<br>文章篇名與 PDF 會顯示在這裡。</p></div></div>
+            <div class="article-divider"><span>本次報告簡報</span><i></i></div>
+            <div id="presentation-area" class="presentation-area" aria-live="polite"><p class="field-note">請先選擇報告同學。</p></div>
             <div class="reading-note"><span aria-hidden="true">↗</span><p>先掌握研究問題與主要發現，<br>再把你的觀察，化為具體的回饋。</p></div>
           </section>
 

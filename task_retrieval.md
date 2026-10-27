@@ -1,5 +1,38 @@
 # 本次檢索與 instruction lock
 
+## 2026-10-27｜簡報上傳與下載
+
+狀態：RETRIEVAL_PASS；CURRENT_MODEL=UNVERIFIED、CURRENT_EFFORT=UNVERIFIED，無明確切換收益，維持當前設定。
+
+授權續作：使用者當次明確同意既有橋接程式由 Drive 唯讀擴充至讀寫，以供學生上傳簡報。既有 5 MB、學號命名、資料夾、個資與發布範圍鎖定延續。前輪已通過 21 項本機測試（其中雲端同步明確跳過，非正式上傳驗收）；Google 編輯器原始碼與 manifest 已更新保存，正式部署尚未切換。續作須完成 Google 授權、版本部署、真實雲端驗收與測試檔精確清理、Worker／Pages 發布及交接讀回。
+
+續作已核驗：Google manifest 的 drive scope 不等於實際已授予寫入；讀取成功也不能證明建夾權限。實測 createFolder 回報缺少 drive 權限後，使用者親自完成 Google 未驗證應用程式安全提示／授權，並提供成功畫面；之後三份 API 簡報與一份瀏覽器送出均實際成功。橋接沿原網址部署至第 2 版；D1 0003 遷移完成，Worker 1.1.0 已部署。一次 D1 授權錯誤後重試成功；初次部署先於遷移完成的順序已修復，後續發布須確認相依步驟 exit code 才繼續。21 項本機測試重新執行，這次包含真實雲端同步；正式 API 35 位名單／6 份文章原始雜湊通過，新增簡報包括精確 5,242,880 bytes 邊界與 PPTX，四份下載內容雜湊均吻合。原生瀏覽器另存完成未核驗；不可把下載事件等待逾時寫成已存至 Downloads。保留 API 位元組與 UI 送出／更新分層證據。
+
+2026-10-27 使用者補充命名規則：重新查核上述 Google SOP metadata，沿用已讀歸檔段落。新增 instruction lock：上傳區明確提醒以學號命名；伺服器存檔強制為「選取學號.原副檔名」，不以任意上傳檔名覆蓋本次指示。同名重傳保存既有檔案，以最新修改時間優先列出。
+
+2026-10-27 使用者補充容量：重新查核同一 Google SOP metadata，沿用已讀「精準 5MB 上限」限制。當前是自建網站，不套用 Google Forms 預設上限；instruction lock 更新為每檔最多 5 MB（5 × 1024 × 1024 bytes），前端、Worker、Apps Script 三層強制檢查，取代先前暫定 20 MB。邊界值與超限必測。
+
+- In scope：既有 Pages／Worker／D1／Apps Script 的簡報上傳、正式名單選擇、學生資料夾建立、下載及發布驗收。
+- Out of scope：原表單重建、文章改寫、評分、ChatGPT-Project-external（NOT_APPLICABLE）。
+- Authority：當次使用者指示 > 現行原始碼與正式雲端名單 > Google 官方文件 > 專案交接 > SOP。
+- 搜尋詞：專題討論、中文路徑；記憶搜尋未命中，不以舊記憶當來源。
+- 實讀：根目錄與子專案 OPENCODE_HANDOFF.md；Obsidian「Google表單-AppsScript建立與跳題SOP」之歸檔、權限與課程網站串接節；「MarkItDown自動轉換規則與全域工具」之中文路徑節。
+- 採用 current-task rule：固定根資料夾、正式名單、伺服器驗證、私有資料不入公開 Git、下載與內容雜湊分別驗收、測試物件清除。
+- 排除 historical case：舊唯讀限制由本次明確寫入需求取代；不改原表單，不帶入舊的外部 Project 維護狀態。
+- 已知失敗模式：PDF 簡報誤列文章；上傳成功但索引失敗被誤報上傳失敗；重試重複檔案；中文路徑與 inline quoting；OAuth 授權不等於部署成功。
+- selected workflow：UTF-8 檔案與相對路徑；既有獨立橋接增加受簽章保護寫入；簡報帶類別標記；使用穩定上傳 ID 防重試；先本機隔離測試，再更新橋接、Worker／D1、Pages；逐層讀回。
+- instruction lock：標題右邊依序「上傳報告簡報」選檔、學號姓名下拉、送出；接受 .ppt／.pptx／.pdf；存於既有課程根目錄下「學號 姓名」資料夾，不存在才建；原檔保留，不覆寫文章；選報告同學後在文章下載下面列簡報下載，缺檔顯示「尚未上傳」；既有建議保留。
+- Verification：格式／容量／名單／簽章／資料夾歸屬、防重送、文章簡報分流、下載位元組、桌機手機版、正式發布與測試資料零殘留。正式文件／統計／Word QA：NOT_APPLICABLE。
+
+| source / requirement | output | verification |
+|---|---|---|
+| 當次頁首位置與順序 | public/index.html、styles.css | 桌機／手機畫面與操作 |
+| 正式修課名單 | 第三個獨立身分選單、伺服器再核對 | 未知身分拒絕、選單一致 |
+| Drive 學生子資料夾 | 橋接上傳與必要建夾 | 模擬建夾＋正式雲端回讀 |
+| PPT／PPTX／PDF | 格式、大小、內容特徵驗證 | 合法與非法檔案測試 |
+| 簡報下載／尚未上傳 | presentations 索引與獨立區塊 | 分流、空狀態、下載雜湊 |
+| 原文章與建議保留 | 最小資料庫擴充 | 既有整合測試與來源雜湊 |
+
 日期：2026-10-26。狀態：PASS。正式發布與適用功能驗收已完成，證據見 `OPENCODE_HANDOFF.md` 與 ignored `output/` 驗收檔。
 
 ## 範圍
