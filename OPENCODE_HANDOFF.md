@@ -10,7 +10,9 @@
 - 上傳文章或簡報再次上傳時，會覆蓋同一位同學先前的同類檔案，只保留最新一份；Apps Script 端採「先建立新檔，成功後把舊檔移至垃圾桶」，Worker 會停用該生舊索引，避免目錄出現兩三份同類檔案。**正式橋接已更新至版本 7**；先前版本 6 使用 `File.setContent()` 覆寫，會讓 Drive 檔案的 MIME／大小資訊不完整，造成 Worker 回報「雲端文章／簡報資訊不完整」，已改為不使用 `setContent()`。
 - 上傳頁切換學號姓名時，會同時清空文章與簡報的已選檔案、檔名、狀態訊息及暫存上傳識別碼，避免上一位學生的「已儲存…」訊息殘留到新選學生。清單標題為「目前上傳文章的狀態：」與「目前上傳簡報的狀態：」，字級與「已更新雲端資料：…」同為 12px。
 - 上傳錯誤訊息已拆分：空檔顯示「文章／簡報檔案不可為空」，超過容量顯示「檔案大小超過 5MB！」；不再把空檔與超限合併成同一句。
+- 「← 返回學習入口」連結改為 14px、600 字重、行高 1.6，提升可讀性；前端快取版本 `1.5.1`。
 - 回饋頁標題右側新增「教師管理」按鈕。教師以獨立帳號、密碼登入後，選擇報告者，即可查看每位提供建議同學的學號姓名、「我的建議」與「我的心得」；依提供建議同學學號排序，區塊間留白。
+- 教師管理每個回饋區塊新增「刪除這筆」按鈕，經頁面內確認視窗後刪除該組建議與心得；僅教師工作階段可呼叫 `DELETE /api/teacher/feedback`，學生端無法刪除。
 - 教師帳密使用 Cloudflare secrets `TEACHER_USERNAME`、`TEACHER_PASSWORD_HASH`，不寫入程式或 Git。教師帳密已由使用者自行設定完成；本輪**沒有**讀取或記錄任何教師憑證。設定方式見 README 的「教師管理」節與 `scripts/set-teacher-credentials.mjs`。
 
 ### 本輪部署與驗證
@@ -21,6 +23,8 @@
 - 切換身分狀態殘留修正：前端 commit `33e7e7eda3beca6b581662df7b8390d3d52eb946`，Pages workflow `40627162535` 成功；前端資源快取版本 `1.4.1`，Worker 仍為 `1.4.0`。
 - 上傳清單標題修正：前端 commit `19010b908b9e8ce0895e9ddbcf48ecc2a04fe512`，Pages workflow `40627405212` 成功；後續字樣調整 commit `e5d1aa14f833fd3af5e03d2bb34560105274d1ac`，Pages workflow `40627698646` 成功；前端資源快取版本 `1.4.3`，正式站已讀回「目前上傳文章的狀態：」與「目前上傳簡報的狀態：」。
 - 容量錯誤訊息與標題字級：Worker／前端 `1.5.0`，Worker 版本 ID `71fc8379-6be6-4bdf-84a9-90c4e627e94a`；前端 commit `b64c699c1d1609aa2102039fb40f0f91de0273ab`，Pages workflow `40633476567` 成功；前端資源快取版本 `1.5.0`。
+- 返回連結字級：前端 commit `5252bd582e7272cf6f29ff280e08d0a87e4b856e`，Pages workflow `40634654769` 成功；前端資源快取版本 `1.5.1`，正式站已讀回 14px 規則。
+- 教師刪除功能：Worker／前端 `1.6.0`，Worker 版本 ID `29ed75b8-fa0c-4b5b-90ec-5478cb5f628d`；前端 commit `e8579fb5c5f450f7d8dc83e49810ba17fa9e46ff`，Pages workflow `40635548772` 成功；正式站已讀回「刪除這筆」與教師刪除 API。
 - 教師管理 `Failed to fetch` 根因已修正：Worker CORS `Access-Control-Allow-Headers` 加入 `X-Teacher-Token`；正式預檢回 `Content-Type, Authorization, X-Teacher-Token`。
 - 正式站 `index.html`、`app.js`、`config.js`、`favicon.svg` SHA-256 與提交一致；`styles.css` 僅結尾 CRLF／LF 差異，內容相同。
 - 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **36／36 通過**，含建議／心得雙欄、只填心得、3,000 字邊界、公開讀取不含內容、查看建議匿名性、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換。
