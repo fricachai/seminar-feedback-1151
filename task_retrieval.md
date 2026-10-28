@@ -9,7 +9,7 @@
 - 覆蓋規則：同一位學生的文章只保留一份、簡報只保留一份；Apps Script 採「先建立新檔，成功後把舊檔移至垃圾桶」，Worker 上傳後停用該生其他舊索引。再次輸入建議／心得更新同一組主鍵，以最後一次儲存為準。正式橋接已更新至版本 7；版本 6 曾使用 `File.setContent()`，造成 Drive 檔案 MIME／大小不完整與 Worker 回報「雲端文章／簡報資訊不完整」，已改為建立新檔。
 - 隱私邊界：選取報告者後不讀取、不顯示先前建議／心得，兩欄一律空白開始；公開 `GET /api/feedback` 只回傳是否存在與版本時間，不回傳文字；離開回饋頁清空草稿。`/api/presenter-feedback` 只回傳建議字串，不查詢或回傳 reviewer 欄位；教師端 `/api/teacher/feedback` 才回傳 reviewer 學號姓名，且必須通過獨立教師工作階段。
 - CORS：教師 API 使用 `X-Teacher-Token`，Worker 的 `Access-Control-Allow-Headers` 必須包含此標頭；已補上並以正式 OPTIONS 預檢驗證。
-- 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。
+- 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。空狀態只由上方狀態訊息顯示一次，列表區不再重複插入同一句。
 - 教師刪除：教師管理每個區塊提供「刪除這筆」，使用頁面內確認視窗；`DELETE /api/teacher/feedback` 僅接受教師工作階段，刪除單一 presenter／reviewer 的建議與心得。學生端沒有刪除端點。
 - 雙欄必填：前端「儲存建議與心得」必須建議與心得都有非空白內容才啟用；Worker 對只填一欄或未帶欄位的 `PUT /api/feedback` 一律回 400。資料庫 `0006` 的重建表仍允許至少一欄，實際寫入防線由 Worker 統一管制。
 - 資料庫：`0005_feedback_takeaway_teacher.sql` 新增 takeaway 與 teacher_sessions；`0006_feedback_relax_content.sql` 重建 feedback 檢查，各限 3,000 字。兩欄皆必填由 Worker 驗證，資料庫保留「至少一欄」的寬鬆條件以避免舊資料遷移失敗。

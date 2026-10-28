@@ -28,6 +28,7 @@
 - 教師刪除功能：Worker／前端 `1.6.0`，Worker 版本 ID `29ed75b8-fa0c-4b5b-90ec-5478cb5f628d`；前端 commit `e8579fb5c5f450f7d8dc83e49810ba17fa9e46ff`，Pages workflow `40635548772` 成功；正式站已讀回「刪除這筆」與教師刪除 API。
 - 教師管理空狀態重複提示移除：前端 commit `6c9a49e77deb5a8450494b34008bff1e68bdf119`，Pages workflow `40637016279` 成功。
 - 建議／心得雙欄必填：Worker／前端 `1.7.0`，Worker 版本 ID `5e91cc65-6a86-4120-b739-6fd9405ca1e0`；前端 commit `e5fa42443e0fe215cf6ab3d0d037996401cebd0c`，Pages workflow `40637457834` 成功；正式站 `/api/health` 回 `1.7.0`，`app.js` 與提交雜湊一致，已讀回雙欄必填條件與提示文字，前端資源快取版本 `1.7.0`。
+- 填寫進度空狀態重複提示移除：前端 commit `5d4e3150831a68a6b7cc376c7a64c2301ab02c2d`，Pages workflow `40638096548` 成功；前端資源快取版本 `1.7.1`，正式站 `app.js` 已確認該句只保留一處。
 - 教師管理 `Failed to fetch` 根因已修正：Worker CORS `Access-Control-Allow-Headers` 加入 `X-Teacher-Token`；正式預檢回 `Content-Type, Authorization, X-Teacher-Token`。
 - 正式站 `index.html`、`app.js`、`config.js`、`favicon.svg` SHA-256 與提交一致；`styles.css` 僅結尾 CRLF／LF 差異，內容相同。
 - 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **36／36 通過**，含建議／心得雙欄、只填一欄被拒、3,000 字邊界、公開讀取不含內容、查看建議匿名性、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換。
