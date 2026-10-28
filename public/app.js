@@ -12,6 +12,7 @@ try { state.teacherToken = sessionStorage.getItem(TEACHER_TOKEN_KEY) || ''; } ca
 const dirty = () => $('suggestion').value !== state.originalContent || $('takeaway').value !== state.originalTakeaway;
 const pairIsValid = () => state.presenter && state.reviewer && state.presenter !== state.reviewer;
 let discardResolver = null;
+let deleteResolver = null;
 
 function confirmDiscard(text) {
   const dialog = $('confirm-dialog');
@@ -33,6 +34,27 @@ function resolveDiscard(approved) {
 $('confirm-cancel').addEventListener('click', () => resolveDiscard(false));
 $('confirm-continue').addEventListener('click', () => resolveDiscard(true));
 $('confirm-dialog').addEventListener('cancel', event => { event.preventDefault(); resolveDiscard(false); });
+
+function confirmDelete(text) {
+  const dialog = $('delete-dialog');
+  if (dialog.open) return Promise.resolve(false);
+  $('delete-message').textContent = text;
+  return new Promise(resolve => {
+    deleteResolver = resolve;
+    dialog.showModal();
+    $('delete-cancel').focus();
+  });
+}
+
+function resolveDelete(approved) {
+  const resolve = deleteResolver;
+  deleteResolver = null;
+  $('delete-dialog').close();
+  resolve?.(approved);
+}
+$('delete-cancel').addEventListener('click', () => resolveDelete(false));
+$('delete-confirm').addEventListener('click', () => resolveDelete(true));
+$('delete-dialog').addEventListener('cancel', event => { event.preventDefault(); resolveDelete(false); });
 
 function storeToken(token) {
   state.token = token;
@@ -560,8 +582,15 @@ function renderTeacherFeedback(items) {
   for (const item of items) {
     const block = document.createElement('article');
     block.className = 'teacher-feedback-block';
+    const head = document.createElement('div');
+    head.className = 'teacher-feedback-head';
     const heading = document.createElement('h3');
     heading.textContent = `${item.reviewerId} ${item.reviewerName}`;
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'text-button teacher-delete';
+    deleteButton.textContent = '刪除這筆';
+    deleteButton.addEventListener('click', () => deleteTeacherFeedback(item));
     const suggestionLabel = document.createElement('p');
     suggestionLabel.className = 'teacher-field-label';
     suggestionLabel.textContent = '我的建議';
@@ -574,8 +603,34 @@ function renderTeacherFeedback(items) {
     const takeaway = document.createElement('p');
     takeaway.className = 'teacher-field-text';
     takeaway.textContent = String(item.takeaway || '').trim() || '（未填寫）';
-    block.append(heading, suggestionLabel, suggestion, takeawayLabel, takeaway);
+    head.append(heading, deleteButton);
+    block.append(head, suggestionLabel, suggestion, takeawayLabel, takeaway);
     area.append(block);
+  }
+}
+
+async function deleteTeacherFeedback(item) {
+  const presenter = $('teacher-presenter').value;
+  if (!presenter) return;
+  const approved = await confirmDelete(`確定刪除 ${item.reviewerId} 給這位報告者的建議與心得？刪除後無法復原。`);
+  if (!approved) return;
+  state.teacherLoading = true;
+  updateControls();
+  try {
+    const result = await teacherApi(`/api/teacher/feedback?presenter=${encodeURIComponent(presenter)}&reviewer=${encodeURIComponent(item.reviewerId)}`, { method: 'DELETE' });
+    message('teacher-status', result.deleted ? '已刪除這筆建議與心得。' : '這筆資料已不存在。', 'success');
+    await loadTeacherFeedback();
+  } catch (error) {
+    if (error.code === 'TEACHER_AUTH') {
+      storeTeacherToken('');
+      showTeacherLogin('教師連線已到期，請重新登入。', 'error');
+      return;
+    }
+    message('teacher-status', error.message, 'error');
+    authError(error);
+  } finally {
+    state.teacherLoading = false;
+    updateControls();
   }
 }
 

@@ -217,6 +217,13 @@ async function studentProgress(env, reviewer) {
   return json({ items: rows.results });
 }
 
+async function teacherDeleteFeedback(env, presenter, reviewer) {
+  if (!/^\d{8}$/.test(presenter || '') || !/^\d{8}$/.test(reviewer || '')) throw httpError(400, '請選擇要刪除的報告者與填寫者。');
+  const result = await env.DB.prepare('DELETE FROM feedback WHERE class_id = ? AND presenter_id = ? AND reviewer_id = ?')
+    .bind(env.CLASS_ID, presenter, reviewer).run();
+  return json({ ok: true, deleted: result.meta.changes });
+}
+
 async function teacherFeedback(env, presenter) {
   if (!/^\d{8}$/.test(presenter || '')) throw httpError(400, '請選擇報告者。');
   const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(presenter).first();
@@ -231,7 +238,7 @@ async function teacherFeedback(env, presenter) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.5.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.6.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -248,6 +255,10 @@ async function route(request, env, ctx) {
   if (path === '/api/teacher/feedback' && request.method === 'GET') {
     await authenticateTeacher(request, env);
     return teacherFeedback(env, url.searchParams.get('presenter'));
+  }
+  if (path === '/api/teacher/feedback' && request.method === 'DELETE') {
+    await authenticateTeacher(request, env);
+    return teacherDeleteFeedback(env, url.searchParams.get('presenter'), url.searchParams.get('reviewer'));
   }
   if (path === '/api/papers' && request.method === 'POST') {
     const payload = validatePaper(await bodyJSON(request, Math.ceil(MAX_PAPER_BYTES / 3) * 4 + 4096));

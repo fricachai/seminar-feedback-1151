@@ -146,6 +146,8 @@ test('教師帳密登入、讀取排序後的建議與心得、登出',{skip:!te
  const r=await api(`/api/teacher/feedback?presenter=${ids[0]}`,{headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(r.status,200);
  const data=await r.json();assert.ok(data.feedback.length>=1);const reviewerIds=data.feedback.map(item=>item.reviewerId);
  assert.deepEqual(reviewerIds,[...reviewerIds].sort());assert.ok(data.feedback.every(item=>Object.hasOwn(item,'content')&&Object.hasOwn(item,'takeaway')&&item.reviewerName));
+ const del=await api(`/api/teacher/feedback?presenter=${ids[0]}&reviewer=${ids[1]}`,{method:'DELETE',headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(del.status,200);assert.equal((await del.json()).deleted,1);
+ const after=await api(`/api/teacher/feedback?presenter=${ids[0]}`,{headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(after.status,200);assert.equal((await after.json()).feedback.some(item=>item.reviewerId===ids[1]),false);
  const logout=await api('/api/teacher/session',{method:'DELETE',headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(logout.status,200);
 });
 test('直接猜 PDF 路徑或私有目錄無法繞過通關',async()=>{
