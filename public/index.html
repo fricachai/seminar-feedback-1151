@@ -9,9 +9,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>專題討論（1）・共學筆記</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=1.2.0">
-  <script src="config.js?v=1.2.0" defer></script>
-  <script src="app.js?v=1.2.0" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.3.0">
+  <script src="config.js?v=1.3.0" defer></script>
+  <script src="app.js?v=1.3.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要內容</a>
@@ -69,6 +69,13 @@
               <p>選擇報告同學，下載文章與簡報，寫下你的觀察、提問與具體建議。</p>
               <span class="home-card-action">前往閱讀與回饋 <span aria-hidden="true">→</span></span>
             </a>
+            <a class="home-card" href="#received">
+              <span class="home-card-number">03</span>
+              <span class="section-kicker">PEER FEEDBACK</span>
+              <h2>查看給我的建議</h2>
+              <p>選擇自己的學號與姓名，查看同學對你報告的建議；不顯示提供建議的同學資訊。</p>
+              <span class="home-card-action">前往查看 <span aria-hidden="true">→</span></span>
+            </a>
           </nav>
           <p class="home-footnote"><span class="tiny-dot"></span> 文章閱讀 <span aria-hidden="true">／</span> 專注聆聽 <span aria-hidden="true">／</span> 具體回饋</p>
         </section>
@@ -92,23 +99,53 @@
                 <div class="material-field">
                   <label for="paper-file">報告文章（PDF）</label>
                   <div class="upload-file-wrap"><label for="paper-file" class="upload-file-label">選擇文章 PDF <span aria-hidden="true">↑</span></label><input id="paper-file" type="file" accept=".pdf" aria-describedby="paper-help paper-status"><span id="paper-filename" class="upload-filename">尚未選擇檔案</span></div>
-                  <p id="paper-help" class="field-note">檔名請用「年份_篇名」，例：2024_綠色行銷對品牌權益的影響。限 PDF，5 MB 以內。</p>
+                  <p id="paper-help" class="field-note">檔名請用「年份_篇名」，例：2024_綠色行銷對品牌權益的影響。限 PDF，5 MB 以內；再次上傳會覆蓋先前的文章檔。</p>
                   <p id="paper-status" class="field-note" role="status" aria-live="polite"></p>
                   <div class="upload-existing"><p class="upload-existing-label">目前已上傳文章</p><div id="paper-existing" class="upload-existing-list"><p class="field-note">請先選擇自己的學號與姓名。</p></div></div>
                 </div>
                 <div class="material-field">
                   <label for="presentation-file">報告簡報（PPT／PPTX／PDF）</label>
                   <div class="upload-file-wrap"><label for="presentation-file" class="upload-file-label">選擇簡報檔 <span aria-hidden="true">↑</span></label><input id="presentation-file" type="file" accept=".ppt,.pptx,.pdf" aria-describedby="presentation-help presentation-status"><span id="presentation-filename" class="upload-filename">尚未選擇檔案</span></div>
-                  <p id="presentation-help" class="field-note">檔名會自動以學號命名，例：12345678.pptx。限 PPT、PPTX 或 PDF，5 MB 以內。</p>
+                  <p id="presentation-help" class="field-note">檔名會自動以學號命名，例：12345678.pptx。限 PPT、PPTX 或 PDF，5 MB 以內；再次上傳會覆蓋先前的簡報檔。</p>
                   <p id="presentation-status" class="field-note" role="status" aria-live="polite"></p>
                   <div class="upload-existing"><p class="upload-existing-label">目前已上傳簡報</p><div id="presentation-existing" class="upload-existing-list"><p class="field-note">請先選擇自己的學號與姓名。</p></div></div>
                 </div>
               </div>
               <div class="material-actions">
-                <p id="material-status" class="field-note" role="status" aria-live="polite">可只上傳文章或簡報，也可兩項一起送出。</p>
+                <p id="material-status" class="field-note" role="status" aria-live="polite">可只上傳文章或簡報，也可兩項一起送出；再次上傳會覆蓋先前同類檔案。</p>
                 <button id="material-submit" class="primary-button" type="submit" disabled>送出 <span aria-hidden="true">→</span></button>
               </div>
             </form>
+          </section>
+          <section class="panel progress-panel" aria-labelledby="progress-heading">
+            <div class="panel-heading"><span class="section-number">02</span><div><p class="section-kicker">MY REVIEW PROGRESS</p><h2 id="progress-heading">我的填寫進度</h2></div></div>
+            <div class="progress-identity">
+              <label for="progress-student">請選擇自己的學號與姓名</label>
+              <div class="select-wrap"><select id="progress-student"><option value="">請選擇自己的學號與姓名</option></select></div>
+              <p id="progress-status" class="field-note" role="status" aria-live="polite">選擇身分後，列出你已完成建議或心得的報告同學。</p>
+            </div>
+            <div id="progress-list" class="progress-list"><p class="field-note">尚未選擇身分。</p></div>
+            <div class="progress-actions"><p class="field-note">只列出已完成的報告同學；未完成的不顯示。</p><button id="progress-reload" class="text-button" type="button">重新讀取</button></div>
+          </section>
+        </section>
+
+        <section id="view-received" class="view received-view" hidden aria-labelledby="received-title">
+          <div class="view-heading">
+            <a class="text-button back-link" href="#home"><span aria-hidden="true">←</span> 返回學習入口</a>
+            <p class="eyebrow"><span></span> PEER FEEDBACK</p>
+            <h1 id="received-title">查看給我的建議</h1>
+            <p class="intro-description">選擇自己的學號與姓名，讀取同學對你報告的建議。畫面只呈現建議內容，不顯示提供建議的同學資訊。</p>
+          </div>
+          <section class="panel received-panel" aria-labelledby="received-heading">
+            <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">YOUR FEEDBACK</p><h2 id="received-heading">選擇自己的身分</h2></div></div>
+            <div class="received-identity">
+              <label for="received-student">請選擇自己的學號與姓名</label>
+              <div class="select-wrap"><select id="received-student"><option value="">請選擇自己的學號與姓名</option></select></div>
+              <p id="received-status" class="field-note" role="status" aria-live="polite">選擇身分後，會讀取同學給你的建議。</p>
+            </div>
+            <div class="writing-heading"><label for="received-text">同學給我的建議</label><span id="received-count"></span></div>
+            <div class="editor-wrap"><textarea id="received-text" rows="16" readonly placeholder="選擇身分後，同學的建議會顯示在這裡。"></textarea></div>
+            <div class="received-actions"><p class="field-note">只顯示建議內容，不顯示提供建議的同學。</p><button id="received-reload" class="text-button" type="button">重新讀取</button></div>
           </section>
         </section>
 
@@ -116,8 +153,9 @@
           <div class="view-heading"><a class="text-button back-link" href="#home"><span aria-hidden="true">←</span> 返回學習入口</a></div>
           <section class="classroom-intro feedback-intro" aria-labelledby="classroom-title">
             <div><p class="eyebrow"><span></span> OUR SEMINAR NOTEBOOK</p><h1 id="classroom-title">聆聽之後，<span class="serif-accent">留下你的觀點。</span></h1><p class="intro-description">選擇今天的報告同學，閱讀文章，寫下具體而友善的建議。</p></div>
+            <div class="teacher-entry"><a class="text-button teacher-button" href="#teacher">教師管理 <span aria-hidden="true">→</span></a></div>
           </section>
-          <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存我的建議</li></ol>
+          <ol class="journey" aria-label="填寫步驟"><li class="current"><span>01</span> 選擇報告者</li><li><span>02</span> 確認填寫身分</li><li><span>03</span> 儲存建議與心得</li></ol>
           <div id="global-status" class="global-status" role="status" aria-live="polite" hidden></div>
           <div class="classroom-bottom catalog-toolbar"><span id="catalog-status">正在讀取課程資料…</span><button id="refresh-catalog" class="text-button" type="button">更新雲端文章 <span aria-hidden="true">↻</span></button></div>
           <div class="workspace">
@@ -137,12 +175,37 @@
             <div class="panel-heading"><span class="section-number">02</span><div><p class="section-kicker">YOUR PERSPECTIVE</p><h2 id="feedback-heading">讓建議，成為進步的線索。</h2></div><span id="save-badge" class="save-badge">尚未開始</span></div>
             <label for="reviewer">我是誰 <span class="label-aside">請選擇你自己的學號與姓名</span></label>
             <div class="select-wrap"><select id="reviewer"><option value="">請選擇填寫者的學號與姓名</option></select></div>
-            <div class="writing-heading"><label for="suggestion">我的建議</label><span id="word-count">0 / 5,000</span></div>
-            <div class="editor-wrap"><textarea id="suggestion" maxlength="5000" rows="9" disabled placeholder="你可以從這些方向思考：&#10;&#10;・報告中，哪一個觀點讓你印象深刻？&#10;・研究問題、方法或結果，有哪些值得再釐清？&#10;・對報告內容或表達方式，你有什麼具體建議？" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
+            <div class="writing-heading"><label for="suggestion">我對報告同學的建議</label><span id="word-count">0 / 3,000</span></div>
+            <div class="editor-wrap"><textarea id="suggestion" maxlength="3000" rows="8" disabled placeholder="你可以從這些方向思考：&#10;&#10;・報告中，哪一個觀點讓你印象深刻？&#10;・研究問題、方法或結果，有哪些值得再釐清？&#10;・對報告內容或表達方式，你有什麼具體建議？" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
+            <div class="writing-heading takeaway-heading"><label for="takeaway">我對此份報告的心得</label><span id="takeaway-count">0 / 3,000</span></div>
+            <div class="editor-wrap"><textarea id="takeaway" maxlength="3000" rows="6" disabled placeholder="寫下這份報告帶給你的啟發、你學到的一個觀點，或你之後想進一步了解的地方。" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
             <div class="feedback-info"><p id="feedback-status" class="field-note" role="status" aria-live="polite">請先選擇報告同學與你自己的身分。</p><button id="reload-feedback" class="text-button" type="button" hidden>重新讀取</button></div>
-            <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">再次選回同一位報告者時，會帶出已儲存的建議。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存我的建議</span></button></div>
+            <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">再次選回同一位報告者時，會帶出已儲存的建議與心得。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存建議與心得</span></button></div>
           </section>
           </div>
+        </section>
+
+        <section id="view-teacher" class="view teacher-view" hidden aria-labelledby="teacher-title">
+          <div class="view-heading">
+            <a class="text-button back-link" href="#feedback"><span aria-hidden="true">←</span> 返回閱讀與回饋</a>
+            <p class="eyebrow"><span></span> TEACHER REVIEW</p>
+            <h1 id="teacher-title">教師管理</h1>
+            <p class="intro-description">教師登入後，可選擇報告者，查看每位同學給這位報告者的建議與心得。此頁會顯示提供建議的同學學號與姓名，僅供教師使用。</p>
+          </div>
+          <section id="teacher-login" class="panel teacher-panel" aria-labelledby="teacher-login-heading">
+            <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">SIGN IN</p><h2 id="teacher-login-heading">教師登入</h2></div></div>
+            <form id="teacher-login-form" class="teacher-login-form">
+              <div><label for="teacher-username">教師帳號</label><input id="teacher-username" type="text" autocomplete="username" maxlength="100" required></div>
+              <div><label for="teacher-password">教師密碼</label><input id="teacher-password" type="password" autocomplete="current-password" maxlength="200" required></div>
+              <p id="teacher-login-status" class="field-note" role="status" aria-live="polite">請輸入教師帳號與密碼。</p>
+              <button id="teacher-login-button" class="primary-button" type="submit">登入教師管理</button>
+            </form>
+          </section>
+          <section id="teacher-panel" class="panel teacher-panel" hidden aria-labelledby="teacher-panel-heading">
+            <div class="panel-heading teacher-panel-heading"><span class="section-number">02</span><div><p class="section-kicker">PEER REVIEWS</p><h2 id="teacher-panel-heading">查看同儕建議與心得</h2></div><button id="teacher-logout" class="text-button" type="button">離開教師管理</button></div>
+            <div class="teacher-identity"><label for="teacher-presenter">報告者的學號與姓名</label><div class="select-wrap"><select id="teacher-presenter"><option value="">請選擇報告者的學號與姓名</option></select></div><p id="teacher-status" class="field-note" role="status" aria-live="polite">請選擇報告者。</p></div>
+            <div id="teacher-feedback" class="teacher-feedback" aria-live="polite"><p class="field-note">選擇報告者後，會列出每位同學的建議與心得。</p></div>
+          </section>
         </section>
       </div>
     </main>

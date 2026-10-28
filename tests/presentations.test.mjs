@@ -18,7 +18,7 @@ function fixture() {
   const iter=items=>{let i=0;return {hasNext:()=>i<items.length,next:()=>items[i++]};};
   const makeBlob=(data,type,name)=>({getBytes:()=>[...data].map(b=>b>127?b-256:b),getName:()=>name,getContentType:()=>type,copyBlob(){return makeBlob(data,type,name);},setContentType(){return this;}});
   const addFile=(folder,name,bytes,mime,description='')=>{
-    const file={id:`fakeDriveFile_${++sequence}`,name,description,trashed:false,getId(){return this.id;},getName(){return this.name;},getSize:()=>bytes.length,getMimeType:()=>mime,getDescription(){return this.description;},setDescription(d){this.description=d;return this;},getLastUpdated:()=>new Date(),isTrashed(){return this.trashed;},setTrashed(t){this.trashed=t;},getBlob:()=>makeBlob(bytes,mime,name),getParents:()=>iter([folder])};
+    const file={id:`fakeDriveFile_${++sequence}`,name,description,trashed:false,getId(){return this.id;},getName(){return this.name;},setName(n){this.name=n;return this;},getSize:()=>bytes.length,getMimeType:()=>mime,getDescription(){return this.description;},setDescription(d){this.description=d;return this;},setContent(blob){bytes=Buffer.from(blob.getBytes().map(b=>(b+256)%256));mime=blob.getContentType();return this;},getLastUpdated:()=>new Date(),isTrashed(){return this.trashed;},setTrashed(t){this.trashed=t;},getBlob:()=>makeBlob(bytes,mime,name),getParents:()=>iter([folder])};
     folder.files.push(file);allFiles.set(file.id,file);return file;
   };
   const addFolder=name=>{
@@ -56,15 +56,25 @@ test('雲端缺資料夾即建「學號 姓名」，重試不產生重複檔',()
   assert.equal(f.createdFolders,1);assert.equal(f.folders[0].getName(),`${student.id} ${student.name}`);
   assert.equal(first.presentation.driveFileId,second.presentation.driveFileId);assert.equal(f.folders[0].files.length,1);
 });
-test('沿用既有學生資料夾、保留文章、PDF 簡報與 PPT 分流；新重傳不覆寫',()=>{
+test('沿用既有學生資料夾、保留文章；重新上傳簡報會覆蓋並只留一份',()=>{
   const f=fixture(),folder=f.addFolder(`${student.id} ${student.name}`);
   f.addFile(folder,'article.pdf',pdf,'application/pdf');
-  f.addFile(folder,`${student.id}.ppt`,Buffer.from('d0cf11e0a1b11ae1','hex'),'application/vnd.ms-powerpoint');
+  const oldPpt=f.addFile(folder,`${student.id}.ppt`,Buffer.from('d0cf11e0a1b11ae1','hex'),'application/vnd.ms-powerpoint');
   f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
   f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
   const catalog=f.context.catalog_(f.root,[student]);
-  assert.equal(f.createdFolders,0);assert.equal(catalog.papers.length,1);assert.equal(catalog.presentations.length,3);
-  assert.equal(folder.files.length,4);
+  assert.equal(f.createdFolders,0);assert.equal(catalog.papers.length,1);assert.equal(catalog.presentations.length,1);
+  assert.equal(folder.files.filter(file=>!file.trashed).length,2);assert.equal(oldPpt.trashed,true);
+  assert.equal(catalog.presentations[0].filename,`${student.id}.pdf`);
+});
+test('重新上傳不同格式簡報會汰換舊檔，不留下兩份',()=>{
+  const f=fixture(),folder=f.addFolder(`${student.id} ${student.name}`);
+  f.addFile(folder,`${student.id}.ppt`,Buffer.from('d0cf11e0a1b11ae1','hex'),'application/vnd.ms-powerpoint');
+  f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
+  f.context.uploadPresentation_(f.root,[student],validatePresentation(payload(Buffer.from('504b030478797a','hex'),'update.pptx')));
+  const catalog=f.context.catalog_(f.root,[student]);
+  assert.equal(catalog.presentations.length,1);assert.equal(folder.files.filter(file=>!file.trashed).length,1);
+  assert.equal(catalog.presentations[0].filename,`${student.id}.pptx`);
 });
 test('Google 端獨立拒絕超限、冒用學生與重複身分資料夾',()=>{
   const f=fixture(),p=validatePresentation(payload());
@@ -113,6 +123,16 @@ test('雲端文章上傳建立資料夾、重試去重，並與簡報分流',()=
   f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
   const mixed=f.context.catalog_(f.root,[student]);
   assert.equal(mixed.papers.length,1);assert.equal(mixed.presentations.length,1);
+});
+test('重新上傳文章會覆蓋舊文章，只保留最新一份',()=>{
+  const f=fixture(),folder=f.addFolder(`${student.id} ${student.name}`);
+  const old=f.addFile(folder,'2023_舊文章.pdf',pdf,'application/pdf');
+  f.context.uploadPaper_(f.root,[student],validatePaper(paperPayload(pdf,'2024_新文章.pdf')));
+  f.context.uploadPaper_(f.root,[student],validatePaper(paperPayload(pdf,'2025_更新文章.pdf')));
+  const catalog=f.context.catalog_(f.root,[student]);
+  assert.equal(catalog.papers.length,1);assert.equal(catalog.papers[0].filename,'2025_更新文章.pdf');
+  assert.equal(folder.files.filter(file=>!file.trashed).length,1);assert.equal(folder.files.filter(file=>!file.trashed)[0].getName(),'2025_更新文章.pdf');
+  assert.equal(old.trashed,false);
 });
 test('Google 端獨立拒絕文章超限、空白篇名、冒用學生與重複身分資料夾',()=>{
   const f=fixture(),p=validatePaper(paperPayload());

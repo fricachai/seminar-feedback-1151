@@ -94,6 +94,46 @@ function studentFolder_(root,student) {
   if (!folder) folder = root.createFolder(student.id + ' ' + student.name);
   return folder;
 }
+function categoryFiles_(folder, category) {
+  var files = folder.getFiles(), list = [];
+  while (files.hasNext()) {
+    var file = files.next();
+    if (file.isTrashed()) continue;
+    if (category === 'presentation') {
+      if (isPresentation_(file)) list.push(file);
+    } else if (file.getMimeType() === MimeType.PDF && !isPresentation_(file)) {
+      list.push(file);
+    }
+  }
+  list.sort(function(a,b) { return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); });
+  return list;
+}
+function replaceCategoryFile_(folder, category, blob, filename, marker) {
+  var existing = categoryFiles_(folder, category), target = null;
+  if (existing.length) {
+    target = existing[0];
+    var extension = filename.match(/\.[a-z0-9]+$/i)[0].toLowerCase();
+    var sameType = target.getMimeType() === blob.getContentType() &&
+      target.getName().toLowerCase().slice(-extension.length) === extension;
+    if (sameType) {
+      target.setContent(blob);
+      target.setName(filename);
+      target.setDescription(marker);
+    } else {
+      target = folder.createFile(blob);
+      try { target.setDescription(marker); }
+      catch (error) { target.setTrashed(true); throw error; }
+    }
+    for (var i = 0; i < existing.length; i++) {
+      if (existing[i].getId() !== target.getId() && !existing[i].isTrashed()) existing[i].setTrashed(true);
+    }
+    return target;
+  }
+  var created = folder.createFile(blob);
+  try { created.setDescription(marker); }
+  catch (error) { created.setTrashed(true); throw error; }
+  return created;
+}
 function uploadPresentation_(root,students,p) {
   if (!p || !/^\d{8}$/.test(p.studentId || '') || !/^[a-f0-9-]{36}$/.test(p.uploadId || '')) throw new Error('Invalid identity.');
   var student = students.find(function(s) {return s.id === p.studentId;});
@@ -126,11 +166,8 @@ function uploadPresentation_(root,students,p) {
         return {ok:true,presentation:presentationInfo_(prior,student.id)};
       }
     }
-    var created = folder.createFile(blob);
-    try { created.setDescription(marker); }
-    catch (error) { created.setTrashed(true); throw error; }
-    // Never overwrite existing article files or previous presentation uploads.
-    return {ok:true,presentation:presentationInfo_(created,student.id)};
+    var target = replaceCategoryFile_(folder,'presentation',blob,p.filename,marker);
+    return {ok:true,presentation:presentationInfo_(target,student.id)};
   } finally { lock.releaseLock(); }
 }
 function uploadPaper_(root,students,p) {
@@ -159,11 +196,8 @@ function uploadPaper_(root,students,p) {
         return {ok:true,paper:paperInfo_(prior,student)};
       }
     }
-    var created = folder.createFile(Utilities.newBlob(bytes,p.mimeType,filename));
-    try { created.setDescription(marker); }
-    catch (error) { created.setTrashed(true); throw error; }
-    // The uploaded paper is a new file; existing articles and presentations stay untouched.
-    return {ok:true,paper:paperInfo_(created,student)};
+    var target = replaceCategoryFile_(folder,'paper',Utilities.newBlob(bytes,p.mimeType,filename),filename,marker);
+    return {ok:true,paper:paperInfo_(target,student)};
   } finally { lock.releaseLock(); }
 }
 

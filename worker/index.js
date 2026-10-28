@@ -3,7 +3,9 @@ import { validatePresentation, MAX_PRESENTATION_BYTES } from './presentations.js
 import { validatePaper, MAX_PAPER_BYTES } from './papers.js';
 const encoder = new TextEncoder();
 const SESSION_SECONDS = 12 * 60 * 60;
-const MAX_CONTENT = 5000;
+const MAX_CONTENT = 3000;
+const MAX_TAKEAWAY = 3000;
+const MAX_TEACHER_ATTEMPTS = 8;
 
 export async function digest(value) {
   const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(value));
@@ -17,8 +19,13 @@ function equalHash(a, b) {
   return diff === 0;
 }
 
-function httpError(status, message) {
-  return Object.assign(new Error(message), { status });
+function httpError(status, message, code) {
+  return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
+}
+
+function createToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
 function json(data, status = 200, headers = {}) {
@@ -68,14 +75,73 @@ function allowedOrigins(env) {
 
 async function authenticate(request, env) {
   const raw = request.headers.get('Authorization') || '';
-  if (!/^Bearer [A-Za-z0-9_-]{43}$/.test(raw)) throw httpError(401, '請先輸入課程通關碼。');
+  if (!/^Bearer [A-Za-z0-9_-]{43}$/.test(raw)) throw httpError(401, '請先輸入課程通關碼。', 'CLASS_AUTH');
   const tokenHash = await digest(raw.slice(7));
   const session = await env.DB.prepare('SELECT expires_at FROM sessions WHERE token_hash = ?')
     .bind(tokenHash).first();
   if (!session || session.expires_at <= Math.floor(Date.now() / 1000)) {
-    throw httpError(401, '課程連線已到期，請重新輸入通關碼。');
+    throw httpError(401, '課程連線已到期，請重新輸入通關碼。', 'CLASS_AUTH');
   }
   return tokenHash;
+}
+
+async function authenticateTeacher(request, env) {
+  const raw = request.headers.get('X-Teacher-Token') || '';
+  if (!/^Bearer [A-Za-z0-9_-]{43}$/.test(raw)) throw httpError(401, '請先登入教師管理。', 'TEACHER_AUTH');
+  const tokenHash = await digest(raw.slice(7));
+  const session = await env.DB.prepare('SELECT expires_at FROM teacher_sessions WHERE token_hash = ?')
+    .bind(tokenHash).first();
+  if (!session || session.expires_at <= Math.floor(Date.now() / 1000)) {
+    throw httpError(401, '教師連線已到期，請重新登入。', 'TEACHER_AUTH');
+  }
+  return tokenHash;
+}
+
+function teacherConfigured(env) {
+  return typeof env.TEACHER_USERNAME === 'string' && env.TEACHER_USERNAME.length > 0 &&
+    /^[a-f0-9]{64}$/.test(env.TEACHER_PASSWORD_HASH || '');
+}
+
+async function teacherLogin(request, env, ctx) {
+  if (!teacherConfigured(env)) throw httpError(503, '教師登入尚未設定，請由管理者設定帳號與密碼。', 'TEACHER_NOT_CONFIGURED');
+  const data = await bodyJSON(request, 2048);
+  if (typeof data.username !== 'string' || typeof data.password !== 'string' ||
+    !data.username || !data.password || data.username.length > 100 || data.password.length > 200) {
+    throw httpError(400, '請輸入教師帳號與密碼。');
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const ipKey = await digest(`teacher:${request.headers.get('CF-Connecting-IP') || 'local'}`);
+  const limit = await env.DB.prepare('SELECT count, window_end FROM login_limits WHERE key = ?').bind(ipKey).first();
+  if (limit && limit.window_end > now && limit.count >= MAX_TEACHER_ATTEMPTS) {
+    return json({ error: '嘗試次數較多，請稍候 15 分鐘再試。', code: 'TEACHER_RATE_LIMIT' }, 429, { 'Retry-After': String(limit.window_end - now) });
+  }
+  const usernameOk = data.username === env.TEACHER_USERNAME;
+  const passwordOk = equalHash(await digest(data.password), env.TEACHER_PASSWORD_HASH);
+  if (!usernameOk || !passwordOk) {
+    await env.DB.prepare(`INSERT INTO login_limits (key, count, window_end) VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN login_limits.window_end <= ? THEN 1 ELSE login_limits.count + 1 END,
+        window_end = CASE WHEN login_limits.window_end <= ? THEN excluded.window_end ELSE login_limits.window_end END`)
+      .bind(ipKey, now + 900, now, now).run();
+    throw httpError(401, '教師帳號或密碼不正確。', 'TEACHER_LOGIN');
+  }
+  const token = createToken();
+  const expiresAt = now + SESSION_SECONDS;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO teacher_sessions (token_hash, expires_at) VALUES (?, ?)').bind(await digest(token), expiresAt),
+    env.DB.prepare('DELETE FROM login_limits WHERE key = ?').bind(ipKey),
+  ]);
+  ctx.waitUntil(env.DB.batch([
+    env.DB.prepare('DELETE FROM teacher_sessions WHERE expires_at <= ?').bind(now),
+    env.DB.prepare('DELETE FROM login_limits WHERE window_end <= ?').bind(now),
+  ]));
+  return json({ token, expiresAt });
+}
+
+async function teacherLogout(request, env) {
+  const tokenHash = await authenticateTeacher(request, env);
+  await env.DB.prepare('DELETE FROM teacher_sessions WHERE token_hash = ?').bind(tokenHash).run();
+  return json({ ok: true });
 }
 
 async function login(request, env, ctx) {
@@ -96,8 +162,7 @@ async function login(request, env, ctx) {
       .bind(ipKey, now + 900, now, now).run();
     throw httpError(401, '通關碼不正確，請確認老師提供的課程通關碼。');
   }
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  const token = btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  const token = createToken();
   const expiresAt = now + SESSION_SECONDS;
   await env.DB.batch([
     env.DB.prepare('INSERT INTO sessions (token_hash, expires_at) VALUES (?, ?)').bind(await digest(token), expiresAt),
@@ -121,15 +186,51 @@ async function validPair(env, presenter, reviewer) {
 }
 
 async function readFeedback(env, presenter, reviewer) {
-  return await env.DB.prepare(`SELECT content, revision, updated_at AS updatedAt FROM feedback
+  return await env.DB.prepare(`SELECT content, takeaway, revision, updated_at AS updatedAt FROM feedback
     WHERE class_id = ? AND presenter_id = ? AND reviewer_id = ?`)
-    .bind(env.CLASS_ID, presenter, reviewer).first() || { content: '', revision: 0, updatedAt: null };
+    .bind(env.CLASS_ID, presenter, reviewer).first() || { content: '', takeaway: '', revision: 0, updatedAt: null };
+}
+
+async function presenterFeedback(env, presenter) {
+  if (!/^\d{8}$/.test(presenter || '')) throw httpError(400, '請選擇報告者。');
+  const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(presenter).first();
+  if (!student) throw httpError(400, '學生資料已更新，請重新整理名單。');
+  const rows = await env.DB.prepare(`SELECT f.content FROM feedback f JOIN students s ON s.id = f.reviewer_id
+    WHERE f.class_id = ? AND f.presenter_id = ? AND s.active = 1 AND length(trim(f.content)) > 0
+    ORDER BY f.updated_at, f.reviewer_id`).bind(env.CLASS_ID, presenter).all();
+  const suggestions = rows.results.map(row => row.content);
+  return json({ suggestions, count: suggestions.length });
+}
+
+async function studentProgress(env, reviewer) {
+  if (!/^\d{8}$/.test(reviewer || '')) throw httpError(400, '請選擇自己的學號與姓名。');
+  const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(reviewer).first();
+  if (!student) throw httpError(400, '學生資料已更新，請重新整理名單。');
+  const rows = await env.DB.prepare(`SELECT f.presenter_id AS presenterId, s.name AS presenterName,
+    CASE WHEN length(trim(f.content)) > 0 THEN 1 ELSE 0 END AS hasSuggestion,
+    CASE WHEN length(trim(f.takeaway)) > 0 THEN 1 ELSE 0 END AS hasTakeaway
+    FROM feedback f JOIN students s ON s.id = f.presenter_id
+    WHERE f.class_id = ? AND f.reviewer_id = ? AND s.active = 1
+      AND (length(trim(f.content)) > 0 OR length(trim(f.takeaway)) > 0)
+    ORDER BY f.presenter_id`).bind(env.CLASS_ID, reviewer).all();
+  return json({ items: rows.results });
+}
+
+async function teacherFeedback(env, presenter) {
+  if (!/^\d{8}$/.test(presenter || '')) throw httpError(400, '請選擇報告者。');
+  const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(presenter).first();
+  if (!student) throw httpError(400, '學生資料已更新，請重新整理名單。');
+  const rows = await env.DB.prepare(`SELECT f.reviewer_id AS reviewerId, s.name AS reviewerName,
+    f.content, f.takeaway, f.updated_at AS updatedAt FROM feedback f JOIN students s ON s.id = f.reviewer_id
+    WHERE f.class_id = ? AND f.presenter_id = ? AND s.active = 1
+    ORDER BY f.reviewer_id`).bind(env.CLASS_ID, presenter).all();
+  return json({ presenterId: presenter, feedback: rows.results });
 }
 
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.2.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.3.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -139,6 +240,14 @@ async function route(request, env, ctx) {
     return json({ ok: true });
   }
   if (path === '/api/sync' && request.method === 'POST') return json(await refreshCatalog(env));
+  if (path === '/api/presenter-feedback' && request.method === 'GET') return presenterFeedback(env, url.searchParams.get('presenter'));
+  if (path === '/api/student-progress' && request.method === 'GET') return studentProgress(env, url.searchParams.get('reviewer'));
+  if (path === '/api/teacher/session' && request.method === 'POST') return teacherLogin(request, env, ctx);
+  if (path === '/api/teacher/session' && request.method === 'DELETE') return teacherLogout(request, env);
+  if (path === '/api/teacher/feedback' && request.method === 'GET') {
+    await authenticateTeacher(request, env);
+    return teacherFeedback(env, url.searchParams.get('presenter'));
+  }
   if (path === '/api/papers' && request.method === 'POST') {
     const payload = validatePaper(await bodyJSON(request, Math.ceil(MAX_PAPER_BYTES / 3) * 4 + 4096));
     const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(payload.studentId).first();
@@ -186,18 +295,21 @@ async function route(request, env, ctx) {
   if (path === '/api/feedback' && request.method === 'PUT') {
     const data = await bodyJSON(request);
     await validPair(env, data.presenter, data.reviewer);
-    if (typeof data.content !== 'string' || !data.content.trim() || data.content.length > MAX_CONTENT || data.content.includes('\u0000')) {
-      throw httpError(400, '請填寫 1 至 5,000 字的建議內容。');
+    const content = typeof data.content === 'string' ? data.content : '';
+    const takeaway = typeof data.takeaway === 'string' ? data.takeaway : '';
+    if (content.length > MAX_CONTENT || takeaway.length > MAX_TAKEAWAY || content.includes('\u0000') || takeaway.includes('\u0000')) {
+      throw httpError(400, '建議與心得各限 3,000 字，且不可包含控制字元。');
     }
+    if (!content.trim() && !takeaway.trim()) throw httpError(400, '請至少填寫建議或心得其中一項。');
     if (!Number.isSafeInteger(data.revision) || data.revision < 0) throw httpError(400, '請重新讀取先前建議後再儲存。');
     const updatedAt = new Date().toISOString();
     const result = data.revision === 0
-      ? await env.DB.prepare(`INSERT INTO feedback (class_id, presenter_id, reviewer_id, content, revision, updated_at)
-          VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT(class_id, presenter_id, reviewer_id) DO NOTHING`)
-          .bind(env.CLASS_ID, data.presenter, data.reviewer, data.content, updatedAt).run()
-      : await env.DB.prepare(`UPDATE feedback SET content = ?, revision = revision + 1, updated_at = ?
+      ? await env.DB.prepare(`INSERT INTO feedback (class_id, presenter_id, reviewer_id, content, takeaway, revision, updated_at)
+          VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT(class_id, presenter_id, reviewer_id) DO NOTHING`)
+          .bind(env.CLASS_ID, data.presenter, data.reviewer, content, takeaway, updatedAt).run()
+      : await env.DB.prepare(`UPDATE feedback SET content = ?, takeaway = ?, revision = revision + 1, updated_at = ?
           WHERE class_id = ? AND presenter_id = ? AND reviewer_id = ? AND revision = ?`)
-          .bind(data.content, updatedAt, env.CLASS_ID, data.presenter, data.reviewer, data.revision).run();
+          .bind(content, takeaway, updatedAt, env.CLASS_ID, data.presenter, data.reviewer, data.revision).run();
     if (result.meta.changes !== 1) throw httpError(409, '這份建議已在其他頁面更新。請先複製保留目前文字，再重新讀取。');
     return json(await readFeedback(env, data.presenter, data.reviewer));
   }
@@ -237,7 +349,7 @@ export default {
       if (!allowed) throw httpError(403, '此網站來源未獲允許。');
       response = request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : await route(request, env, ctx);
     } catch (error) {
-      response = json({ error: error.status ? error.message : '暫時無法連線，請稍後再試；尚未儲存的文字請先保留。' }, error.status || 500);
+      response = json({ error: error.status ? error.message : '暫時無法連線，請稍後再試；尚未儲存的文字請先保留。', ...(error.code ? { code: error.code } : {}) }, error.status || 500);
     }
     const secured = new Response(response.body, response);
     for (const [name, value] of Object.entries(headers)) secured.headers.set(name, value);

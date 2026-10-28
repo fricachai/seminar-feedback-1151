@@ -96,6 +96,50 @@ test('PDF 經通關後下載，內容與原始檔雜湊一致',async()=>{
  const bytes=Buffer.from(await r.arrayBuffer());const expected=JSON.parse(readFileSync(resolve(root,'.private/manifest.json'),'utf8')).papers.map(p=>p.sha256);
  assert.equal(expected.includes(hash(bytes)),true);assert.ok(r.headers.get('content-disposition').startsWith('attachment;'));
 });
+test('建議與心得可分別儲存，重新讀回保留兩欄，後寫入者覆蓋原內容',async()=>{
+ const content='[AUTOMATED-VERIFY] 建議內容', takeaway='[AUTOMATED-VERIFY] 心得內容';
+ const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content,takeaway,revision:0}});assert.equal(r.status,200);
+ const saved=await feedback(ids[1],ids[2]);assert.equal(saved.content,content);assert.equal(saved.takeaway,takeaway);assert.equal(saved.revision,1);
+ const updated=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content:'[AUTOMATED-VERIFY] 新版建議',takeaway:'[AUTOMATED-VERIFY] 新版心得',revision:1}});assert.equal(updated.status,200);
+ const latest=await feedback(ids[1],ids[2]);assert.equal(latest.content,'[AUTOMATED-VERIFY] 新版建議');assert.equal(latest.takeaway,'[AUTOMATED-VERIFY] 新版心得');assert.equal(latest.revision,2);
+});
+test('只填心得、不填建議也可以儲存',async()=>{
+ const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[0],content:'',takeaway:'[AUTOMATED-VERIFY] 只有心得',revision:0}});assert.equal(r.status,200);
+ const saved=await feedback(ids[1],ids[0]);assert.equal(saved.content,'');assert.equal(saved.takeaway,'[AUTOMATED-VERIFY] 只有心得');
+});
+test('建議與心得各限 3,000 字，空白與超限拒絕',async()=>{
+ const base={presenter:ids[0],reviewer:ids[2]};
+ const ok=await api('/api/feedback',{method:'PUT',body:{...base,content:'x'.repeat(3000),takeaway:'y'.repeat(3000),revision:0}});assert.equal(ok.status,200);
+ for(const body of [{...base,content:'x'.repeat(3001),takeaway:'',revision:1},{...base,content:'',takeaway:'y'.repeat(3001),revision:1},{...base,content:'  ',takeaway:'  ',revision:1}]){
+  const r=await api('/api/feedback',{method:'PUT',body});assert.equal(r.status,400);
+ }
+});
+test('查看給我的建議只回傳建議文字，不包含填寫者資訊',async()=>{
+ const r=await api(`/api/presenter-feedback?presenter=${ids[0]}`);assert.equal(r.status,200);const data=await r.json();
+ assert.deepEqual(Object.keys(data).sort(),['count','suggestions']);assert.equal(data.count,data.suggestions.length);assert.ok(data.suggestions.every(item=>typeof item==='string'));
+ assert.equal(JSON.stringify(data).includes(ids[1]),false);
+});
+test('填寫進度只列出已完成項目，且依報告者學號排序',async()=>{
+ const r=await api(`/api/student-progress?reviewer=${ids[2]}`);assert.equal(r.status,200);const data=await r.json();
+ assert.ok(Array.isArray(data.items));
+ const item=data.items.find(entry=>entry.presenterId===ids[1]);assert.ok(item);assert.equal(item.hasSuggestion,1);assert.equal(item.hasTakeaway,1);
+ assert.deepEqual(Object.keys(item).sort(),['hasSuggestion','hasTakeaway','presenterId','presenterName']);
+ const idsInOrder=data.items.map(entry=>entry.presenterId);assert.deepEqual(idsInOrder,[...idsInOrder].sort());
+});
+test('教師管理未登入不能讀取建議與心得',async()=>{
+ const r=await api(`/api/teacher/feedback?presenter=${ids[0]}`);assert.equal(r.status,401);assert.equal((await r.json()).code,'TEACHER_AUTH');
+});
+const teacherPassword=process.env.SEMINAR_TEST_TEACHER_PASSWORD;
+test('教師帳密登入、讀取排序後的建議與心得、登出',{skip:!teacherPassword},async()=>{
+ const wrong=await api('/api/teacher/session',{method:'POST',body:{username:process.env.SEMINAR_TEST_TEACHER_USERNAME||'teacher',password:'wrong-password'}});
+ assert.equal(wrong.status,401);assert.equal((await wrong.json()).code,'TEACHER_LOGIN');
+ const login=await api('/api/teacher/session',{method:'POST',body:{username:process.env.SEMINAR_TEST_TEACHER_USERNAME||'teacher',password:teacherPassword}});
+ assert.equal(login.status,200);const {token}=await login.json();
+ const r=await api(`/api/teacher/feedback?presenter=${ids[0]}`,{headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(r.status,200);
+ const data=await r.json();assert.ok(data.feedback.length>=1);const reviewerIds=data.feedback.map(item=>item.reviewerId);
+ assert.deepEqual(reviewerIds,[...reviewerIds].sort());assert.ok(data.feedback.every(item=>Object.hasOwn(item,'content')&&Object.hasOwn(item,'takeaway')&&item.reviewerName));
+ const logout=await api('/api/teacher/session',{method:'DELETE',headers:{'X-Teacher-Token':`Bearer ${token}`}});assert.equal(logout.status,200);
+});
 test('直接猜 PDF 路徑或私有目錄無法繞過通關',async()=>{
  for(const path of ['/'+'a'.repeat(64)+'.pdf','/.private/manifest.json','/.dev.vars','/worker/index.js']){const r=await api(path,{auth:false});assert.equal(r.status,404);}
 });

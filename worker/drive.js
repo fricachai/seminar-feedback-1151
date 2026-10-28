@@ -70,7 +70,12 @@ export async function uploadPresentation(env, payload) {
     const result = await bridge(env,'upload','',payload);
     const p = await preparePresentation(result.presentation,new Set([payload.studentId]));
     // The file already exists in Drive: indexing failure must never imply the file was not saved.
-    try { await presentationStatement(env,p).run(); }
+    try {
+      await env.DB.batch([
+        presentationStatement(env,p),
+        env.DB.prepare('UPDATE presentations SET active = 0 WHERE student_id = ? AND id <> ?').bind(p.studentId,p.id),
+      ]);
+    }
     catch { return {ok:true,indexed:false,filename:p.filename}; }
     return {ok:true,indexed:true,filename:p.filename};
   });
@@ -81,7 +86,12 @@ export async function uploadPaper(env, payload) {
     const result = await bridge(env,'upload-paper','',payload);
     const p = await preparePaper(result.paper,new Set([payload.studentId]));
     // The file already exists in Drive: indexing failure must never imply the file was not saved.
-    try { await paperStatement(env,p).run(); }
+    try {
+      await env.DB.batch([
+        paperStatement(env,p),
+        env.DB.prepare('UPDATE papers SET active = 0 WHERE student_id = ? AND id <> ?').bind(p.studentId,p.id),
+      ]);
+    }
     catch { return {ok:true,indexed:false,filename:p.filename,title:p.title}; }
     return {ok:true,indexed:true,filename:p.filename,title:p.title};
   });

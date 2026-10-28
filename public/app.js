@@ -1,12 +1,15 @@
 const $ = id => document.getElementById(id);
 const API = (globalThis.SEMINAR_CONFIG?.apiBase || '').replace(/\/$/, '');
 const TOKEN_KEY = 'seminar-1151-session';
+const TEACHER_TOKEN_KEY = 'seminar-1151-teacher';
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const VIEWS = ['home', 'upload', 'feedback'];
+const MAX_FEEDBACK_CHARS = 3000;
+const VIEWS = ['home', 'upload', 'feedback', 'received', 'teacher'];
 const PAPER_NAME = /^\d{4}_.+\.pdf$/i;
-const state = { token: '', students: [], presenter: '', reviewer: '', original: '', revision: 0, ready: false, saving: false, loading: false, uploading: false, uploadSyncing: false, paperUploadId: '', presentationUploadId: '', loadSeq: 0, uploadLookupSeq: 0, controller: null, authenticatedBefore: false, view: 'home' };
+const state = { token: '', students: [], presenter: '', reviewer: '', originalContent: '', originalTakeaway: '', revision: 0, ready: false, saving: false, loading: false, uploading: false, uploadSyncing: false, paperUploadId: '', presentationUploadId: '', loadSeq: 0, uploadLookupSeq: 0, progressSeq: 0, progressController: null, receivedSeq: 0, receivedController: null, teacherToken: '', teacherLoading: false, teacherSeq: 0, controller: null, authenticatedBefore: false, view: 'home' };
 try { state.token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch { /* Private browsing may restrict storage; the in-memory session still works. */ }
-const dirty = () => $('suggestion').value !== state.original;
+try { state.teacherToken = sessionStorage.getItem(TEACHER_TOKEN_KEY) || ''; } catch { /* In-memory teacher session remains available. */ }
+const dirty = () => $('suggestion').value !== state.originalContent || $('takeaway').value !== state.originalTakeaway;
 const pairIsValid = () => state.presenter && state.reviewer && state.presenter !== state.reviewer;
 let discardResolver = null;
 
@@ -56,7 +59,9 @@ function showViewNow(view) {
     renderArticles();
     if (pairIsValid() && !state.ready) loadPair();
   }
-  if (view === 'upload') renderUploadExisting();
+  if (view === 'upload') { renderUploadExisting(); renderProgressView(); }
+  if (view === 'received') renderReceivedView();
+  if (view === 'teacher') initTeacherView();
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
@@ -72,7 +77,7 @@ async function applyView(view) {
     if (!leave) { history.replaceState(null, '', '#upload'); return; }
   }
   if (state.view === 'feedback' && dirty()) {
-    const leave = await confirmDiscard('目前的建議尚未儲存。仍要離開這個頁面嗎？返回後可繼續填寫，建議不會自動儲存。');
+    const leave = await confirmDiscard('目前的建議或心得尚未儲存。仍要離開這個頁面嗎？返回後可繼續填寫，內容不會自動儲存。');
     if (!leave) { history.replaceState(null, '', '#feedback'); return; }
   }
   showViewNow(view);
@@ -99,7 +104,7 @@ async function api(path, options = {}) {
     const response = await fetch(`${API}${path}`, { ...requestOptions, headers, signal: controller.signal, cache: 'no-store' });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw Object.assign(new Error(data.error || '暫時無法連線，請稍後再試。'), { status: response.status });
+      throw Object.assign(new Error(data.error || '暫時無法連線，請稍後再試。'), { status: response.status, code: data.code });
     }
     return options.binary ? response : await response.json();
   } finally {
@@ -109,7 +114,7 @@ async function api(path, options = {}) {
 }
 
 function authError(error) {
-  if (error.status !== 401 || !state.authenticatedBefore) return false;
+  if (error.status !== 401 || !state.authenticatedBefore || error.code === 'TEACHER_AUTH' || error.code === 'TEACHER_LOGIN') return false;
   $('gate').hidden = false;
   $('classroom').hidden = true;
   $('logout').hidden = true;
@@ -124,18 +129,29 @@ function setBadge(text, kind = '') {
 }
 
 function updateControls() {
-  $('word-count').textContent = `${$('suggestion').value.length.toLocaleString('zh-TW')} / 5,000`;
-  $('save').disabled = !state.ready || state.saving || state.loading || !pairIsValid() || !dirty() || !$('suggestion').value.trim();
+  const suggestion = $('suggestion').value;
+  const takeaway = $('takeaway').value;
+  $('word-count').textContent = `${suggestion.length.toLocaleString('zh-TW')} / 3,000`;
+  $('takeaway-count').textContent = `${takeaway.length.toLocaleString('zh-TW')} / 3,000`;
+  $('save').disabled = !state.ready || state.saving || state.loading || !pairIsValid() || !dirty() || (!suggestion.trim() && !takeaway.trim());
   $('suggestion').disabled = !state.ready || state.saving || !pairIsValid();
+  $('takeaway').disabled = !state.ready || state.saving || !pairIsValid();
   $('presenter').disabled = state.saving || state.loading;
   $('reviewer').disabled = state.saving || state.loading;
   $('refresh-catalog').disabled = state.saving || state.loading || state.uploading || state.uploadSyncing;
-  $('logout').disabled = state.saving || state.loading || state.uploading;
+  $('logout').disabled = state.saving || state.loading || state.uploading || state.teacherLoading;
   const uploadBusy = state.uploading || state.loading || state.uploadSyncing || state.saving;
   $('uploader').disabled = uploadBusy;
   $('paper-file').disabled = uploadBusy;
   $('presentation-file').disabled = uploadBusy;
   $('material-submit').disabled = uploadBusy || !$('uploader').value || (!$('paper-file').files.length && !$('presentation-file').files.length);
+  $('progress-student').disabled = state.loading;
+  $('progress-reload').disabled = state.loading;
+  $('received-student').disabled = state.loading;
+  $('received-reload').disabled = state.loading;
+  $('teacher-presenter').disabled = state.teacherLoading || state.loading;
+  $('teacher-logout').disabled = state.teacherLoading;
+  $('teacher-login-button').disabled = state.teacherLoading;
   if (state.saving) setBadge('儲存中…');
   else if (state.ready && dirty()) setBadge('尚未儲存', 'dirty');
   else if (state.ready && state.revision > 0) setBadge('已儲存', 'saved');
@@ -351,9 +367,11 @@ async function loadPair() {
   state.controller?.abort();
   state.controller = new AbortController();
   state.ready = false;
-  state.original = '';
+  state.originalContent = '';
+  state.originalTakeaway = '';
   state.revision = 0;
   $('suggestion').value = '';
+  $('takeaway').value = '';
   $('reload-feedback').hidden = true;
   updateControls();
   if (!state.presenter || !state.reviewer) {
@@ -362,14 +380,17 @@ async function loadPair() {
   if (!pairIsValid()) {
     setBadge('請確認身分'); message('feedback-status', '你是這次的報告者，請選擇其他同學的報告再留下建議。'); return;
   }
-  setBadge('讀取中…'); message('feedback-status', '正在確認這組報告者與填寫者的先前建議…');
+  setBadge('讀取中…'); message('feedback-status', '正在確認這組報告者與填寫者的先前建議與心得…');
   const presenter = state.presenter, reviewer = state.reviewer;
   try {
     const data = await api(`/api/feedback?presenter=${encodeURIComponent(presenter)}&reviewer=${encodeURIComponent(reviewer)}`, { signal: state.controller.signal });
     if (seq !== state.loadSeq || presenter !== state.presenter || reviewer !== state.reviewer) return;
-    state.original = data.content; state.revision = data.revision; state.ready = true;
-    $('suggestion').value = data.content;
-    message('feedback-status', data.updatedAt ? `已帶入先前建議・上次儲存 ${formatTime(data.updatedAt)}` : '還沒有儲存過建議。寫下你的觀察，再按下方按鈕儲存。');
+    state.originalContent = data.content || '';
+    state.originalTakeaway = data.takeaway || '';
+    state.revision = data.revision; state.ready = true;
+    $('suggestion').value = state.originalContent;
+    $('takeaway').value = state.originalTakeaway;
+    message('feedback-status', data.updatedAt ? `已帶入先前建議與心得・上次儲存 ${formatTime(data.updatedAt)}` : '還沒有儲存過建議或心得。寫下你的觀察，再按下方按鈕儲存。');
     updateControls();
   } catch (error) {
     if (seq !== state.loadSeq || error.name === 'AbortError') return;
@@ -379,15 +400,240 @@ async function loadPair() {
   }
 }
 
+async function loadReceived({ announce = true } = {}) {
+  const studentId = $('received-student').value;
+  const seq = ++state.receivedSeq;
+  state.receivedController?.abort();
+  state.receivedController = new AbortController();
+  $('received-text').value = '';
+  $('received-count').textContent = '';
+  if (!studentId) {
+    message('received-status', '請選擇自己的學號與姓名。');
+    return;
+  }
+  if (announce) message('received-status', '正在讀取同學給你的建議…');
+  try {
+    const data = await api(`/api/presenter-feedback?presenter=${encodeURIComponent(studentId)}`, { signal: state.receivedController.signal });
+    if (seq !== state.receivedSeq) return;
+    const suggestions = Array.isArray(data.suggestions) ? data.suggestions.map(item => String(item)) : [];
+    $('received-text').value = suggestions.join('\n\n');
+    $('received-count').textContent = suggestions.length ? `共 ${suggestions.length} 位同學提供建議` : '';
+    message('received-status', suggestions.length ? '已讀取同學給你的建議。' : '目前尚無同學提供建議。', suggestions.length ? 'success' : '');
+  } catch (error) {
+    if (seq !== state.receivedSeq || error.name === 'AbortError') return;
+    message('received-status', error.message, 'error');
+    authError(error);
+  }
+}
+
+function renderReceivedView() {
+  if (!state.students.length) {
+    message('received-status', '正在讀取課程名單…');
+    return;
+  }
+  if ($('received-student').value) loadReceived();
+  else {
+    $('received-text').value = '';
+    $('received-count').textContent = '';
+    message('received-status', '請選擇自己的學號與姓名。');
+  }
+}
+
+function renderProgressItems(items) {
+  const area = $('progress-list');
+  area.replaceChildren();
+  if (!items?.length) {
+    const note = document.createElement('p');
+    note.className = 'field-note';
+    note.textContent = '尚未完成任何報告同學的建議或心得。';
+    area.append(note);
+    return;
+  }
+  const list = document.createElement('ul');
+  list.className = 'progress-items';
+  for (const item of items) {
+    if (!item.hasSuggestion && !item.hasTakeaway) continue;
+    const row = document.createElement('li');
+    row.className = 'progress-item';
+    const name = document.createElement('span');
+    name.className = 'progress-name';
+    name.textContent = `${item.presenterId} ${item.presenterName}`;
+    const badges = document.createElement('span');
+    badges.className = 'progress-badges';
+    if (item.hasSuggestion) {
+      const badge = document.createElement('span');
+      badge.className = 'progress-badge done';
+      badge.textContent = '建議已完成';
+      badges.append(badge);
+    }
+    if (item.hasTakeaway) {
+      const badge = document.createElement('span');
+      badge.className = 'progress-badge done';
+      badge.textContent = '心得已完成';
+      badges.append(badge);
+    }
+    row.append(name, badges);
+    list.append(row);
+  }
+  area.append(list);
+}
+
+async function loadProgress({ announce = true } = {}) {
+  const studentId = $('progress-student').value;
+  const seq = ++state.progressSeq;
+  state.progressController?.abort();
+  state.progressController = new AbortController();
+  if (!studentId) {
+    $('progress-list').replaceChildren();
+    const note = document.createElement('p');
+    note.className = 'field-note';
+    note.textContent = '尚未選擇身分。';
+    $('progress-list').append(note);
+    message('progress-status', '請選擇自己的學號與姓名。');
+    return;
+  }
+  if (announce) message('progress-status', '正在讀取你的填寫進度…');
+  try {
+    const data = await api(`/api/student-progress?reviewer=${encodeURIComponent(studentId)}`, { signal: state.progressController.signal });
+    if (seq !== state.progressSeq) return;
+    const items = Array.isArray(data.items) ? data.items : [];
+    renderProgressItems(items);
+    message('progress-status', items.length ? `共完成 ${items.length} 位報告同學。` : '尚未完成任何報告同學的建議或心得。', items.length ? 'success' : '');
+  } catch (error) {
+    if (seq !== state.progressSeq || error.name === 'AbortError') return;
+    message('progress-status', error.message, 'error');
+    authError(error);
+  }
+}
+
+function renderProgressView() {
+  if (!state.students.length) {
+    message('progress-status', '正在讀取課程名單…');
+    return;
+  }
+  if ($('progress-student').value) loadProgress();
+  else {
+    $('progress-list').replaceChildren();
+    const note = document.createElement('p');
+    note.className = 'field-note';
+    note.textContent = '尚未選擇身分。';
+    $('progress-list').append(note);
+    message('progress-status', '選擇身分後，列出你已完成建議或心得的報告同學。');
+  }
+}
+
+function storeTeacherToken(token) {
+  state.teacherToken = token;
+  try { token ? sessionStorage.setItem(TEACHER_TOKEN_KEY, token) : sessionStorage.removeItem(TEACHER_TOKEN_KEY); } catch { /* In-memory fallback. */ }
+}
+
+function teacherApi(path, options = {}) {
+  const headers = new Headers(options.headers);
+  if (state.teacherToken) headers.set('X-Teacher-Token', `Bearer ${state.teacherToken}`);
+  return api(path, { ...options, headers });
+}
+
+function showTeacherLogin(text = '請輸入教師帳號與密碼。', kind = '') {
+  $('teacher-login').hidden = false;
+  $('teacher-panel').hidden = true;
+  message('teacher-login-status', text, kind);
+}
+
+function showTeacherPanel() {
+  $('teacher-login').hidden = true;
+  $('teacher-panel').hidden = false;
+  if ($('teacher-presenter').value) loadTeacherFeedback();
+  else {
+    message('teacher-status', '請選擇報告者。');
+    $('teacher-feedback').replaceChildren();
+    const note = document.createElement('p');
+    note.className = 'field-note';
+    note.textContent = '選擇報告者後，會列出每位同學的建議與心得。';
+    $('teacher-feedback').append(note);
+  }
+}
+
+function initTeacherView() {
+  if (state.teacherToken) showTeacherPanel();
+  else showTeacherLogin();
+}
+
+function renderTeacherFeedback(items) {
+  const area = $('teacher-feedback');
+  area.replaceChildren();
+  if (!items?.length) {
+    const note = document.createElement('p');
+    note.className = 'field-note';
+    note.textContent = '目前尚無同學提供建議或心得。';
+    area.append(note);
+    return;
+  }
+  for (const item of items) {
+    const block = document.createElement('article');
+    block.className = 'teacher-feedback-block';
+    const heading = document.createElement('h3');
+    heading.textContent = `${item.reviewerId} ${item.reviewerName}`;
+    const suggestionLabel = document.createElement('p');
+    suggestionLabel.className = 'teacher-field-label';
+    suggestionLabel.textContent = '我的建議';
+    const suggestion = document.createElement('p');
+    suggestion.className = 'teacher-field-text';
+    suggestion.textContent = String(item.content || '').trim() || '（未填寫）';
+    const takeawayLabel = document.createElement('p');
+    takeawayLabel.className = 'teacher-field-label';
+    takeawayLabel.textContent = '我的心得';
+    const takeaway = document.createElement('p');
+    takeaway.className = 'teacher-field-text';
+    takeaway.textContent = String(item.takeaway || '').trim() || '（未填寫）';
+    block.append(heading, suggestionLabel, suggestion, takeawayLabel, takeaway);
+    area.append(block);
+  }
+}
+
+async function loadTeacherFeedback() {
+  const presenter = $('teacher-presenter').value;
+  const seq = ++state.teacherSeq;
+  if (!presenter) {
+    message('teacher-status', '請選擇報告者。');
+    renderTeacherFeedback([]);
+    return;
+  }
+  state.teacherLoading = true;
+  updateControls();
+  message('teacher-status', '正在讀取同學的建議與心得…');
+  try {
+    const data = await teacherApi(`/api/teacher/feedback?presenter=${encodeURIComponent(presenter)}`);
+    if (seq !== state.teacherSeq) return;
+    renderTeacherFeedback(data.feedback);
+    message('teacher-status', data.feedback.length ? `共 ${data.feedback.length} 位同學提供建議與心得。` : '目前尚無同學提供建議或心得。', data.feedback.length ? 'success' : '');
+  } catch (error) {
+    if (seq !== state.teacherSeq) return;
+    if (error.code === 'TEACHER_AUTH') {
+      storeTeacherToken('');
+      showTeacherLogin('教師連線已到期，請重新登入。', 'error');
+      return;
+    }
+    message('teacher-status', error.message, 'error');
+    authError(error);
+  } finally {
+    if (seq === state.teacherSeq) {
+      state.teacherLoading = false;
+      updateControls();
+    }
+  }
+}
+
 async function loadCatalog({ preserve = false, pair = true } = {}) {
   state.loading = true;
   const oldPresenter = state.presenter, oldReviewer = state.reviewer, oldUploader = $('uploader').value;
+  const oldProgress = $('progress-student').value;
+  const oldReceived = $('received-student').value, oldTeacherPresenter = $('teacher-presenter').value;
   updateControls();
   globalStatus();
   try {
     const data = await api('/api/catalog');
     state.students = data.students;
-    for (const [id, hint] of [['presenter', '請選擇報告者的學號與姓名'], ['reviewer', '請選擇填寫者的學號與姓名'], ['uploader','請選擇自己的學號與姓名']]) {
+    for (const [id, hint] of [['presenter', '請選擇報告者的學號與姓名'], ['reviewer', '請選擇填寫者的學號與姓名'], ['uploader','請選擇自己的學號與姓名'], ['progress-student','請選擇自己的學號與姓名'], ['received-student','請選擇自己的學號與姓名'], ['teacher-presenter','請選擇報告者的學號與姓名']]) {
       $(id).replaceChildren(new Option(hint, ''));
       for (const student of data.students) $(id).add(new Option(`${student.id} ${student.name}`, student.id));
     }
@@ -395,6 +641,9 @@ async function loadCatalog({ preserve = false, pair = true } = {}) {
     state.reviewer = data.students.some(s => s.id === oldReviewer) ? oldReviewer : '';
     $('presenter').value = state.presenter; $('reviewer').value = state.reviewer;
     $('uploader').value = data.students.some(s=>s.id === oldUploader) ? oldUploader : '';
+    $('progress-student').value = data.students.some(s => s.id === oldProgress) ? oldProgress : '';
+    $('received-student').value = data.students.some(s => s.id === oldReceived) ? oldReceived : '';
+    $('teacher-presenter').value = data.students.some(s => s.id === oldTeacherPresenter) ? oldTeacherPresenter : '';
     const uploaded = data.students.filter(s => s.papers.length).length;
     const slidesUploaded = data.students.filter(s=>s.presentations?.length).length;
     $('catalog-status').textContent = `共 ${data.students.length} 位同學・文章 ${uploaded} 位・簡報 ${slidesUploaded} 位${data.syncedAt ? `・更新 ${formatTime(data.syncedAt, true)}` : ''}`;
@@ -411,7 +660,7 @@ async function enterClassroom() {
   $('gate').hidden = true; $('classroom').hidden = false; $('logout').hidden = false;
   $('class-code').value = '';
   showViewNow('home');
-  if (preserve) message('feedback-status', '已重新連線。先前尚未儲存的文字仍保留，請按「儲存我的建議」。');
+  if (preserve) message('feedback-status', '已重新連線。先前尚未儲存的文字仍保留，請按「儲存建議與心得」。');
 }
 
 $('login-form').addEventListener('submit', async event => {
@@ -433,7 +682,7 @@ for (const id of ['presenter', 'reviewer']) {
     if (dirty()) {
       // Keep the visible identity matched to the retained text while confirmation is open.
       $(id).value = state[id];
-      if (!await confirmDiscard('目前的建議尚未儲存。返回後可繼續填寫並儲存；選擇放棄修改，才會切換到另一位同學。')) return;
+      if (!await confirmDiscard('目前的建議或心得尚未儲存。返回後可繼續填寫並儲存；選擇放棄修改，才會切換到另一位同學。')) return;
       $(id).value = next;
     }
     state[id] = next;
@@ -441,22 +690,25 @@ for (const id of ['presenter', 'reviewer']) {
   });
 }
 
-$('suggestion').addEventListener('input', () => {
-  updateControls();
-  if (dirty()) message('feedback-status', '內容尚未儲存，請按下方「儲存我的建議」。');
-});
+for (const id of ['suggestion', 'takeaway']) {
+  $(id).addEventListener('input', () => {
+    updateControls();
+    if (dirty()) message('feedback-status', '內容尚未儲存，請按下方「儲存建議與心得」。');
+  });
+}
 
 $('save').addEventListener('click', async () => {
   if ($('save').disabled) return;
-  const presenter = state.presenter, reviewer = state.reviewer, content = $('suggestion').value, revision = state.revision;
+  const presenter = state.presenter, reviewer = state.reviewer;
+  const content = $('suggestion').value, takeaway = $('takeaway').value, revision = state.revision;
   state.saving = true; updateControls(); $('save').querySelector('span').textContent = '正在儲存…';
   message('feedback-status', '正在儲存，請稍候…'); $('reload-feedback').hidden = true;
   try {
-    const saved = await api('/api/feedback', { method: 'PUT', body: JSON.stringify({ presenter, reviewer, content, revision }) });
+    const saved = await api('/api/feedback', { method: 'PUT', body: JSON.stringify({ presenter, reviewer, content, takeaway, revision }) });
     // Read through the API again, so the success indicator reflects durable server data.
     const checked = await api(`/api/feedback?presenter=${encodeURIComponent(presenter)}&reviewer=${encodeURIComponent(reviewer)}`);
-    if (checked.content !== content || checked.revision !== saved.revision) throw Object.assign(new Error('資料已在另一個頁面變更。請先複製保留目前文字，再重新讀取。'), { status: 409 });
-    state.original = content; state.revision = checked.revision;
+    if (checked.content !== content || (checked.takeaway || '') !== takeaway || checked.revision !== saved.revision) throw Object.assign(new Error('資料已在另一個頁面變更。請先複製保留目前文字，再重新讀取。'), { status: 409 });
+    state.originalContent = content; state.originalTakeaway = takeaway; state.revision = checked.revision;
     message('feedback-status', `已儲存並確認・${formatTime(checked.updatedAt)}。之後仍可修改並再次儲存。`, 'success');
   } catch (error) {
     message('feedback-status', error.message, 'error');
@@ -466,13 +718,65 @@ $('save').addEventListener('click', async () => {
     }
     authError(error);
   } finally {
-    state.saving = false; updateControls(); $('save').querySelector('span').textContent = '儲存我的建議';
+    state.saving = false; updateControls(); $('save').querySelector('span').textContent = '儲存建議與心得';
   }
 });
 
 $('reload-feedback').addEventListener('click', async () => {
-  if (dirty() && !await confirmDiscard('重新讀取會以資料庫內容取代目前文字。請先複製保留需要的修改，再選擇是否繼續。')) return;
+  if (dirty() && !await confirmDiscard('重新讀取會以資料庫內容取代目前的建議與心得。請先複製保留需要的修改，再選擇是否繼續。')) return;
   await loadPair();
+});
+
+$('progress-student').addEventListener('change', () => loadProgress());
+$('progress-reload').addEventListener('click', () => loadProgress());
+$('received-student').addEventListener('change', () => loadReceived());
+$('received-reload').addEventListener('click', () => loadReceived());
+
+$('teacher-presenter').addEventListener('change', () => loadTeacherFeedback());
+
+$('teacher-login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.teacherLoading) return;
+  const username = $('teacher-username').value.trim();
+  const password = $('teacher-password').value;
+  if (!username || !password) {
+    message('teacher-login-status', '請輸入教師帳號與密碼。', 'error');
+    return;
+  }
+  state.teacherLoading = true;
+  updateControls();
+  const button = $('teacher-login-button');
+  button.textContent = '登入中…';
+  message('teacher-login-status', '正在確認教師帳號與密碼…');
+  try {
+    const data = await api('/api/teacher/session', { method: 'POST', body: JSON.stringify({ username, password }) });
+    storeTeacherToken(data.token);
+    $('teacher-password').value = '';
+    showTeacherPanel();
+    message('teacher-login-status', '');
+  } catch (error) {
+    if (error.code === 'TEACHER_LOGIN' || error.code === 'TEACHER_NOT_CONFIGURED' || error.code === 'TEACHER_RATE_LIMIT') {
+      message('teacher-login-status', error.message, 'error');
+    } else if (!authError(error)) {
+      message('teacher-login-status', error.message, 'error');
+    }
+  } finally {
+    state.teacherLoading = false;
+    button.textContent = '登入教師管理';
+    updateControls();
+  }
+});
+
+$('teacher-logout').addEventListener('click', async () => {
+  if (state.teacherLoading) return;
+  state.teacherLoading = true;
+  updateControls();
+  try { await teacherApi('/api/teacher/session', { method: 'DELETE' }); } catch { /* Local teacher token is cleared regardless. */ }
+  state.teacherSeq++;
+  state.teacherLoading = false;
+  storeTeacherToken('');
+  showTeacherLogin('已離開教師管理。');
+  updateControls();
 });
 
 $('refresh-catalog').addEventListener('click', async () => {
@@ -570,12 +874,12 @@ $('material-form').addEventListener('submit', async event => {
           $('paper-file').value = '';
           $('paper-filename').textContent = '尚未選擇檔案';
           state.paperUploadId = '';
-          message('paper-status', `已上傳 ${result.filename}。${result.indexed ? '' : '文章清單尚未更新，請稍後按「更新雲端文章」。'}`, 'success');
+          message('paper-status', `已儲存 ${result.filename}。${result.indexed ? '' : '文章清單尚未更新，請稍後按「更新雲端文章」。'}`, 'success');
         } else {
           $('presentation-file').value = '';
           $('presentation-filename').textContent = '尚未選擇檔案';
           state.presentationUploadId = '';
-          message('presentation-status', `已上傳 ${result.filename}。${result.indexed ? '' : '簡報清單尚未更新，請稍後按「更新雲端文章」。'}`, 'success');
+          message('presentation-status', `已儲存 ${result.filename}。${result.indexed ? '' : '簡報清單尚未更新，請稍後按「更新雲端文章」。'}`, 'success');
         }
         results.push({ kind: job.kind, ok: true, name: result.filename });
       } catch (error) {
@@ -607,17 +911,29 @@ $('logout').addEventListener('click', async () => {
   const hasMaterials = $('paper-file').files.length || $('presentation-file').files.length;
   const prompt = hasMaterials && !dirty()
     ? '目前選擇的檔案尚未送出。選擇放棄後會離開課程，需要時請重新選擇檔案。'
-    : '建議尚未儲存。返回後可先完成儲存；選擇放棄修改，才會離開課程。';
+    : '建議或心得尚未儲存。返回後可先完成儲存；選擇放棄修改，才會離開課程。';
   if ((dirty() || hasMaterials) && !await confirmDiscard(prompt)) return;
-  state.controller?.abort(); state.loadSeq++; state.uploadLookupSeq++;
+  state.controller?.abort(); state.loadSeq++; state.uploadLookupSeq++; state.progressSeq++; state.receivedSeq++; state.teacherSeq++;
+  state.progressController?.abort(); state.receivedController?.abort();
   let logoutFailed = false;
+  if (state.teacherToken) {
+    try { await teacherApi('/api/teacher/session', { method: 'DELETE' }); } catch { /* Expired teacher sessions are cleared locally. */ }
+  }
   try { await api('/api/session', { method: 'DELETE' }); } catch { logoutFailed = true; }
-  storeToken(''); state.students = []; state.original = ''; state.revision = 0; state.presenter = ''; state.reviewer = ''; state.ready = false; state.authenticatedBefore = false;
-  state.uploadSyncing = false;
-  $('suggestion').value = '';
+  storeToken(''); storeTeacherToken('');
+  state.students = []; state.originalContent = ''; state.originalTakeaway = ''; state.revision = 0; state.presenter = ''; state.reviewer = ''; state.ready = false; state.authenticatedBefore = false;
+  state.uploadSyncing = false; state.teacherLoading = false;
+  $('suggestion').value = ''; $('takeaway').value = '';
   $('presenter').replaceChildren(new Option('請選擇報告者的學號與姓名', ''));
   $('reviewer').replaceChildren(new Option('請選擇填寫者的學號與姓名', ''));
   $('uploader').replaceChildren(new Option('請選擇自己的學號與姓名',''));
+  $('progress-student').replaceChildren(new Option('請選擇自己的學號與姓名',''));
+  $('progress-list').replaceChildren();
+  $('received-student').replaceChildren(new Option('請選擇自己的學號與姓名',''));
+  $('received-text').value = ''; $('received-count').textContent = '';
+  $('teacher-presenter').replaceChildren(new Option('請選擇報告者的學號與姓名',''));
+  $('teacher-feedback').replaceChildren();
+  showTeacherLogin('請輸入教師帳號與密碼。');
   clearMaterialFiles();
   renderArticles(); renderUploadExisting(); updateControls();
   $('gate').hidden = false; $('classroom').hidden = true; $('logout').hidden = true;
