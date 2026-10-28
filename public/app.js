@@ -627,7 +627,9 @@ async function loadCatalog({ preserve = false, pair = true } = {}) {
     state.presenter = data.students.some(s => s.id === oldPresenter) ? oldPresenter : '';
     state.reviewer = data.students.some(s => s.id === oldReviewer) ? oldReviewer : '';
     $('presenter').value = state.presenter; $('reviewer').value = state.reviewer;
-    $('uploader').value = data.students.some(s=>s.id === oldUploader) ? oldUploader : '';
+    const nextUploader = data.students.some(s=>s.id === oldUploader) ? oldUploader : '';
+    if (nextUploader !== oldUploader) clearMaterialFiles();
+    $('uploader').value = nextUploader;
     $('progress-student').value = data.students.some(s => s.id === oldProgress) ? oldProgress : '';
     $('received-student').value = data.students.some(s => s.id === oldReceived) ? oldReceived : '';
     $('teacher-presenter').value = data.students.some(s => s.id === oldTeacherPresenter) ? oldTeacherPresenter : '';
@@ -798,12 +800,11 @@ $('presentation-file').addEventListener('change', () => {
 });
 
 $('uploader').addEventListener('change', async () => {
-  if ($('paper-file').files.length || $('presentation-file').files.length) {
-    clearMaterialFiles();
-    message('material-status', '已切換身分，請重新選擇要上傳的檔案。');
-  }
+  clearMaterialFiles();
+  message('material-status', '已切換身分，正在更新雲端資料…');
   renderUploadExisting();
   await syncStudentMaterials();
+  message('material-status', '可只上傳文章或簡報，也可兩項一起送出；再次上傳會覆蓋先前同類檔案。');
 });
 
 $('material-form').addEventListener('submit', async event => {
