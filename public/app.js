@@ -572,13 +572,7 @@ function initTeacherView() {
 function renderTeacherFeedback(items) {
   const area = $('teacher-feedback');
   area.replaceChildren();
-  if (!items?.length) {
-    const note = document.createElement('p');
-    note.className = 'field-note';
-    note.textContent = '目前尚無同學提供建議或心得。';
-    area.append(note);
-    return;
-  }
+  if (!items?.length) return;
   for (const item of items) {
     const block = document.createElement('article');
     block.className = 'teacher-feedback-block';
