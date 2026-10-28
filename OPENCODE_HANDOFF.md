@@ -13,6 +13,7 @@
 - 「← 返回學習入口」連結改為 14px、600 字重、行高 1.6，提升可讀性；前端快取版本 `1.5.1`。
 - 回饋頁標題右側新增「教師管理」按鈕。教師以獨立帳號、密碼登入後，選擇報告者，即可查看每位提供建議同學的學號姓名、「我的建議」與「我的心得」；依提供建議同學學號排序，區塊間留白。
 - 教師管理每個回饋區塊新增「刪除這筆」按鈕，經頁面內確認視窗後刪除該組建議與心得；僅教師工作階段可呼叫 `DELETE /api/teacher/feedback`，學生端無法刪除。
+- 「建議」與「心得」改為**兩欄都必填**：任一欄空白或只有空白字元時，「儲存建議與心得」按鈕維持灰色停用；Worker 亦對只填一欄的請求回 400，避免繞過前端。畫面說明同步改為「建議與心得兩欄都填寫後才能儲存」。
 - 教師帳密使用 Cloudflare secrets `TEACHER_USERNAME`、`TEACHER_PASSWORD_HASH`，不寫入程式或 Git。教師帳密已由使用者自行設定完成；本輪**沒有**讀取或記錄任何教師憑證。設定方式見 README 的「教師管理」節與 `scripts/set-teacher-credentials.mjs`。
 
 ### 本輪部署與驗證
@@ -25,9 +26,11 @@
 - 容量錯誤訊息與標題字級：Worker／前端 `1.5.0`，Worker 版本 ID `71fc8379-6be6-4bdf-84a9-90c4e627e94a`；前端 commit `b64c699c1d1609aa2102039fb40f0f91de0273ab`，Pages workflow `40633476567` 成功；前端資源快取版本 `1.5.0`。
 - 返回連結字級：前端 commit `5252bd582e7272cf6f29ff280e08d0a87e4b856e`，Pages workflow `40634654769` 成功；前端資源快取版本 `1.5.1`，正式站已讀回 14px 規則。
 - 教師刪除功能：Worker／前端 `1.6.0`，Worker 版本 ID `29ed75b8-fa0c-4b5b-90ec-5478cb5f628d`；前端 commit `e8579fb5c5f450f7d8dc83e49810ba17fa9e46ff`，Pages workflow `40635548772` 成功；正式站已讀回「刪除這筆」與教師刪除 API。
+- 教師管理空狀態重複提示移除：前端 commit `6c9a49e77deb5a8450494b34008bff1e68bdf119`，Pages workflow `40637016279` 成功。
+- 建議／心得雙欄必填：Worker／前端 `1.7.0`，Worker 版本 ID `5e91cc65-6a86-4120-b739-6fd9405ca1e0`；前端 commit `e5fa42443e0fe215cf6ab3d0d037996401cebd0c`，Pages workflow `40637457834` 成功；正式站 `/api/health` 回 `1.7.0`，`app.js` 與提交雜湊一致，已讀回雙欄必填條件與提示文字，前端資源快取版本 `1.7.0`。
 - 教師管理 `Failed to fetch` 根因已修正：Worker CORS `Access-Control-Allow-Headers` 加入 `X-Teacher-Token`；正式預檢回 `Content-Type, Authorization, X-Teacher-Token`。
 - 正式站 `index.html`、`app.js`、`config.js`、`favicon.svg` SHA-256 與提交一致；`styles.css` 僅結尾 CRLF／LF 差異，內容相同。
-- 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **36／36 通過**，含建議／心得雙欄、只填心得、3,000 字邊界、公開讀取不含內容、查看建議匿名性、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換。
+- 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **36／36 通過**，含建議／心得雙欄、只填一欄被拒、3,000 字邊界、公開讀取不含內容、查看建議匿名性、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換。
 - 以假資料瀏覽器實測：首頁 03、雙欄空白開始／儲存／覆蓋、查看建議空行合併、填寫進度僅完成項目、教師登入／管理／登出；正式站結構讀回 03、雙欄、教師按鈕、進度區塊與教師登入表單，無水平溢位。
 - 教師已由使用者完成帳密設定並登入教師管理；本輪未讀取或記錄任何憑證。教師 API 的 `X-Teacher-Token` CORS 問題已修正。
 

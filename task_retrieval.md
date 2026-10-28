@@ -11,7 +11,8 @@
 - CORS：教師 API 使用 `X-Teacher-Token`，Worker 的 `Access-Control-Allow-Headers` 必須包含此標頭；已補上並以正式 OPTIONS 預檢驗證。
 - 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。
 - 教師刪除：教師管理每個區塊提供「刪除這筆」，使用頁面內確認視窗；`DELETE /api/teacher/feedback` 僅接受教師工作階段，刪除單一 presenter／reviewer 的建議與心得。學生端沒有刪除端點。
-- 資料庫：`0005_feedback_takeaway_teacher.sql` 新增 takeaway 與 teacher_sessions；`0006_feedback_relax_content.sql` 重建 feedback 檢查，允許「建議或心得至少一項」且各限 3,000 字。
+- 雙欄必填：前端「儲存建議與心得」必須建議與心得都有非空白內容才啟用；Worker 對只填一欄或未帶欄位的 `PUT /api/feedback` 一律回 400。資料庫 `0006` 的重建表仍允許至少一欄，實際寫入防線由 Worker 統一管制。
+- 資料庫：`0005_feedback_takeaway_teacher.sql` 新增 takeaway 與 teacher_sessions；`0006_feedback_relax_content.sql` 重建 feedback 檢查，各限 3,000 字。兩欄皆必填由 Worker 驗證，資料庫保留「至少一欄」的寬鬆條件以避免舊資料遷移失敗。
 - 實讀：根目錄與 `seminar-feedback/OPENCODE_HANDOFF.md`、`README.md`、`task_retrieval.md`；`worker/`、`public/`、`migrations/`、`tests/`、`google-apps-script/`；Obsidian Google 表單 SOP 的課程網站串接與上傳節。
 - 介面修正：上傳頁切換學號姓名時清空文章／簡報的已選檔案、檔名與狀態訊息，避免上一位的「已儲存…」殘留；清單標題為「目前上傳文章的狀態：」與「目前上傳簡報的狀態：」，字級與「已更新雲端資料：…」同為 12px。空檔與超過 5MB 分開提示，超限顯示「檔案大小超過 5MB！」；「← 返回學習入口」改為 14px、600 字重。
 - 驗證：`npm run check`；36 項本機測試（含雙欄、只填心得、3,000 字邊界、公開讀取不含內容、匿名查看、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋）；假資料瀏覽器流程；正式 D1 `0005`／`0006`、Worker `1.4.0`、Pages `40621661887`、正式站五份資源比對與 CORS 預檢。390 新畫面視覺與正式再次上傳覆蓋未另做端到端，不宣稱通過。
