@@ -47,7 +47,9 @@ test('統一以選取學號命名，接受三種格式與大小寫副檔名',()=
 test('5 MB 邊界可上傳；多 1 byte、空檔、假副檔名、未知格式拒絕',()=>{
   const boundary=Buffer.alloc(MAX_PRESENTATION_BYTES,32);pdf.copy(boundary);
   assert.equal(validatePresentation(payload(boundary)).byteSize,MAX_PRESENTATION_BYTES);
-  for(const p of [payload(Buffer.concat([boundary,Buffer.from('x')])),payload(Buffer.alloc(0)),payload(Buffer.from('not pdf')),payload(pdf,'file.exe'),{...payload(),studentId:'invalid'}])assert.throws(()=>validatePresentation(p));
+  assert.throws(()=>validatePresentation(payload(Buffer.concat([boundary,Buffer.from('x')]))),/5MB/);
+  assert.throws(()=>validatePresentation(payload(Buffer.alloc(0))),/不可為空/);
+  for(const p of [payload(Buffer.from('not pdf')),payload(pdf,'file.exe'),{...payload(),studentId:'invalid'}])assert.throws(()=>validatePresentation(p));
 });
 test('雲端缺資料夾即建「學號 姓名」，重試不產生重複檔',()=>{
   const f=fixture(),p=validatePresentation(payload());
@@ -108,7 +110,9 @@ test('文章以「年份_篇名」命名，接受大小寫副檔名並拒絕不�
 test('文章 5 MB 邊界可上傳；多 1 byte、空檔、非 PDF 拒絕',()=>{
   const boundary=Buffer.alloc(MAX_PAPER_BYTES,32);pdf.copy(boundary);
   assert.equal(validatePaper(paperPayload(boundary)).byteSize,MAX_PAPER_BYTES);
-  for(const p of [paperPayload(Buffer.concat([boundary,Buffer.from('x')])),paperPayload(Buffer.alloc(0)),paperPayload(Buffer.from('not pdf'))])assert.throws(()=>validatePaper(p));
+  assert.throws(()=>validatePaper(paperPayload(Buffer.concat([boundary,Buffer.from('x')]))),/5MB/);
+  assert.throws(()=>validatePaper(paperPayload(Buffer.alloc(0))),/不可為空/);
+  assert.throws(()=>validatePaper(paperPayload(Buffer.from('not pdf'))),/PDF/);
 });
 test('雲端文章上傳建立資料夾、重試去重，並與簡報分流',()=>{
   const f=fixture(),p=validatePaper(paperPayload());

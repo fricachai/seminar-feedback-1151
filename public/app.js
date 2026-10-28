@@ -170,17 +170,19 @@ function formatTime(value, withYear = false) {
 
 function paperFileError(file) {
   if (!file) return '請選擇文章 PDF。';
+  if (!file.size) return '文章檔案不可為空，請重新選擇 PDF。';
+  if (file.size > MAX_UPLOAD_BYTES) return '檔案大小超過 5MB！請選擇 5MB 以內的 PDF。';
   if (!/\.pdf$/i.test(file.name) || !PAPER_NAME.test(file.name) || file.name.length > 200 || /[\\/:*?"<>|\u0000-\u001f]/.test(file.name)) {
     return '文章檔名需為「年份_篇名.pdf」，例：2024_綠色行銷對品牌權益的影響.pdf。請重新命名後再選擇。';
   }
-  if (!file.size || file.size > MAX_UPLOAD_BYTES) return '文章檔案不可為空，且須在 5 MB 以內。';
   return '';
 }
 
 function presentationFileError(file) {
   if (!file) return '請選擇簡報檔。';
+  if (!file.size) return '簡報檔案不可為空，請重新選擇檔案。';
+  if (file.size > MAX_UPLOAD_BYTES) return '檔案大小超過 5MB！請選擇 5MB 以內的 PPT、PPTX 或 PDF。';
   if (!/\.(pptx?|pdf)$/i.test(file.name)) return '簡報檔案需為 PPT、PPTX 或 PDF。';
-  if (!file.size || file.size > MAX_UPLOAD_BYTES) return '簡報檔案不可為空，且須在 5 MB 以內。';
   return '';
 }
 
