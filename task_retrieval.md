@@ -1,5 +1,18 @@
 # 本次檢索與 instruction lock
 
+## 2026-10-28｜建議／心得雙欄、03 查看建議、教師管理、上傳覆蓋
+
+狀態：`DELIVERED_PENDING_TEACHER_CREDENTIALS`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
+
+- 使用者需求：回饋頁建議改為「我對報告同學的建議」與「我對此份報告的心得」，各 3,000 字；首頁新增 03 查看給自己的建議（不顯示填寫者資訊）；上傳頁下方新增填寫進度；文章／簡報再次上傳覆蓋舊檔；回饋頁新增教師管理登入與管理頁；用字適當美化。
+- 教師帳密：使用者明確表示由本人設定。本輪未產生、未寫入、未設定任何教師帳密；實作改用 Cloudflare secrets `TEACHER_USERNAME`／`TEACHER_PASSWORD_HASH`，提供 `scripts/set-teacher-credentials.mjs` 由使用者在本機設定。未設定時教師登入回 `503 TEACHER_NOT_CONFIGURED`。
+- 覆蓋規則：同一位學生的文章只保留一份、簡報只保留一份；Apps Script 以既有檔案覆寫或汰換不同格式舊檔，Worker 上傳後停用該生其他舊索引。再次輸入建議／心得更新同一組主鍵，正常再次儲存以最後一次為準；並行分頁仍保留版本衝突保護。
+- 匿名邊界：`/api/presenter-feedback` 只回傳建議字串，不查詢或回傳 reviewer 欄位；教師端 `/api/teacher/feedback` 才回傳 reviewer 學號姓名，且必須通過獨立教師工作階段。
+- 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。
+- 資料庫：`0005_feedback_takeaway_teacher.sql` 新增 takeaway 與 teacher_sessions；`0006_feedback_relax_content.sql` 重建 feedback 檢查，允許「建議或心得至少一項」且各限 3,000 字。
+- 實讀：根目錄與 `seminar-feedback/OPENCODE_HANDOFF.md`、`README.md`、`task_retrieval.md`；`worker/`、`public/`、`migrations/`、`tests/`、`google-apps-script/`；Obsidian Google 表單 SOP 的課程網站串接與上傳節。
+- 驗證：`npm run check`；36 項本機測試（含雙欄、只填心得、3,000 字邊界、匿名查看、填寫進度、教師登入／登出、上傳覆蓋）；假資料瀏覽器流程；正式 D1 `0005`／`0006`、Worker `1.3.0`、Pages `40617319993`、正式站五份資源比對。390 新畫面視覺與正式再次上傳覆蓋未另做端到端，不宣稱通過。
+
 ## 2026-10-27｜學習入口與文章／簡報上傳頁
 
 狀態：`DELIVERED`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
