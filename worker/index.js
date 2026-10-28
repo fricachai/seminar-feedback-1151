@@ -238,7 +238,7 @@ async function teacherFeedback(env, presenter) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.6.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.7.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -312,7 +312,7 @@ async function route(request, env, ctx) {
     if (content.length > MAX_CONTENT || takeaway.length > MAX_TAKEAWAY || content.includes('\u0000') || takeaway.includes('\u0000')) {
       throw httpError(400, '建議與心得各限 3,000 字，且不可包含控制字元。');
     }
-    if (!content.trim() && !takeaway.trim()) throw httpError(400, '請至少填寫建議或心得其中一項。');
+    if (!content.trim() || !takeaway.trim()) throw httpError(400, '請同時填寫建議與心得，兩欄都不可空白。');
     const updatedAt = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO feedback (class_id, presenter_id, reviewer_id, content, takeaway, revision, updated_at)
       VALUES (?, ?, ?, ?, ?, 1, ?)

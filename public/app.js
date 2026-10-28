@@ -156,7 +156,7 @@ function updateControls() {
   const takeaway = $('takeaway').value;
   $('word-count').textContent = `${suggestion.length.toLocaleString('zh-TW')} / 3,000`;
   $('takeaway-count').textContent = `${takeaway.length.toLocaleString('zh-TW')} / 3,000`;
-  $('save').disabled = !state.ready || state.saving || state.loading || !pairIsValid() || !dirty() || (!suggestion.trim() && !takeaway.trim());
+  $('save').disabled = !state.ready || state.saving || state.loading || !pairIsValid() || !dirty() || !suggestion.trim() || !takeaway.trim();
   $('suggestion').disabled = !state.ready || state.saving || !pairIsValid();
   $('takeaway').disabled = !state.ready || state.saving || !pairIsValid();
   $('presenter').disabled = state.saving || state.loading;
@@ -407,7 +407,7 @@ function loadPair() {
   }
   state.ready = true;
   setBadge('等待你的建議');
-  message('feedback-status', '請輸入建議或心得。為保護隱私，不顯示先前內容；儲存後會覆蓋上一次的內容。');
+  message('feedback-status', '請同時填寫建議與心得。兩欄都有內容後才能儲存；為保護隱私，不顯示先前內容，儲存後會覆蓋上一次的內容。');
   updateControls();
 }
 
