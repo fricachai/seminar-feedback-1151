@@ -2,10 +2,10 @@
 
 ## 2026-10-28｜建議／心得雙欄、03 查看建議、教師管理、上傳覆蓋
 
-狀態：`DELIVERED_PENDING_TEACHER_CREDENTIALS`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
+狀態：`DELIVERED`。`CURRENT_MODEL=UNVERIFIED`、`CURRENT_EFFORT=UNVERIFIED`，未自行切換。
 
 - 使用者需求：回饋頁建議改為「我對報告同學的建議」與「我對此份報告的心得」，各 3,000 字；首頁新增 03 查看給自己的建議（不顯示填寫者資訊）；上傳頁下方新增填寫進度；文章／簡報再次上傳覆蓋舊檔；回饋頁新增教師管理登入與管理頁；用字適當美化。
-- 教師帳密：使用者明確表示由本人設定。本輪未產生、未寫入、未設定任何教師帳密；實作改用 Cloudflare secrets `TEACHER_USERNAME`／`TEACHER_PASSWORD_HASH`，提供 `scripts/set-teacher-credentials.mjs` 由使用者在本機設定。未設定時教師登入回 `503 TEACHER_NOT_CONFIGURED`。
+- 教師帳密：使用者明確表示由本人設定，且已完成設定並登入教師管理。本輪未產生、未讀取、未記錄任何教師帳密；實作使用 Cloudflare secrets `TEACHER_USERNAME`／`TEACHER_PASSWORD_HASH`，並提供 `scripts/set-teacher-credentials.mjs` 供日後更換。未設定時教師登入回 `503 TEACHER_NOT_CONFIGURED`。
 - 覆蓋規則：同一位學生的文章只保留一份、簡報只保留一份；Apps Script 以既有檔案覆寫或汰換不同格式舊檔，Worker 上傳後停用該生其他舊索引。再次輸入建議／心得更新同一組主鍵，以最後一次儲存為準。
 - 隱私邊界：選取報告者後不讀取、不顯示先前建議／心得，兩欄一律空白開始；公開 `GET /api/feedback` 只回傳是否存在與版本時間，不回傳文字；離開回饋頁清空草稿。`/api/presenter-feedback` 只回傳建議字串，不查詢或回傳 reviewer 欄位；教師端 `/api/teacher/feedback` 才回傳 reviewer 學號姓名，且必須通過獨立教師工作階段。
 - CORS：教師 API 使用 `X-Teacher-Token`，Worker 的 `Access-Control-Allow-Headers` 必須包含此標頭；已補上並以正式 OPTIONS 預檢驗證。
