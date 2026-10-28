@@ -7,13 +7,13 @@
 - 回饋頁「我的建議」改為「我對報告同學的建議」，新增「我對此份報告的心得」，兩欄各限 3,000 字；同一組報告者／填寫者只保留一筆，再次儲存會覆蓋先前內容。為保護隱私，選取報告者後不再讀取或顯示先前內容，兩欄一律從空白開始；公開讀取端點只回傳是否存在與版本時間，離開回饋頁也會清空目前草稿。
 - 首頁新增 03「查看給我的建議」：選自己的學號姓名後，讀取所有同學給自己的建議，每位同學的建議自成一段、段間空一行；只回傳建議文字，不顯示填寫者姓名、學號或其他資訊。
 - 上傳頁最下方新增「我的填寫進度」：另一個學號姓名下拉，選後只列出自己已完成「建議」或「心得」的報告同學，依學號排序；顯示「建議已完成／心得已完成」，未完成者不列出。
-- 上傳文章或簡報再次上傳時，會覆蓋同一位同學先前的同類檔案，只保留最新一份；Apps Script 端會汰換舊檔，Worker 會停用該生舊索引，避免目錄出現兩三份同類檔案。
+- 上傳文章或簡報再次上傳時，會覆蓋同一位同學先前的同類檔案，只保留最新一份；Apps Script 端會汰換舊檔，Worker 會停用該生舊索引，避免目錄出現兩三份同類檔案。**正式橋接已更新至版本 6**（先前只部署 Worker／前端，造成正式站仍用舊橋接而產生重複檔）；臨時清理操作已移除。
 - 回饋頁標題右側新增「教師管理」按鈕。教師以獨立帳號、密碼登入後，選擇報告者，即可查看每位提供建議同學的學號姓名、「我的建議」與「我的心得」；依提供建議同學學號排序，區塊間留白。
 - 教師帳密使用 Cloudflare secrets `TEACHER_USERNAME`、`TEACHER_PASSWORD_HASH`，不寫入程式或 Git。教師帳密已由使用者自行設定完成；本輪**沒有**讀取或記錄任何教師憑證。設定方式見 README 的「教師管理」節與 `scripts/set-teacher-credentials.mjs`。
 
 ### 本輪部署與驗證
 
-- D1 已套用 `0005_feedback_takeaway_teacher.sql`、`0006_feedback_relax_content.sql`；正式 `students=35`、`papers=6`、`presentations=0`、`feedback=0`、`teacher_sessions=0`。
+- D1 已套用 `0005_feedback_takeaway_teacher.sql`、`0006_feedback_relax_content.sql`；正式 `students=35`、`presentations=0`、`feedback=0`、`teacher_sessions=0`；目前 catalog `papers=7`、7 位學生各有 1 篇（1 位新增文章後的正確狀態）。
 - Worker `1.4.0` 已部署，版本 ID `ec5fda7c-0e93-437d-a213-49fc3bfdc8d2`；`/api/health` 回 `1.4.0`。
 - 前端 commit `51d25a3aec9221e9b4d10a12c31414106a1abb8b` 已推送 `main`；Pages workflow `40621661887` 成功。
 - 教師管理 `Failed to fetch` 根因已修正：Worker CORS `Access-Control-Allow-Headers` 加入 `X-Teacher-Token`；正式預檢回 `Content-Type, Authorization, X-Teacher-Token`。
