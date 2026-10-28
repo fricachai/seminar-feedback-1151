@@ -9,9 +9,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>專題討論（1）・共學筆記</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=1.3.0">
-  <script src="config.js?v=1.3.0" defer></script>
-  <script src="app.js?v=1.3.0" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.4.0">
+  <script src="config.js?v=1.4.0" defer></script>
+  <script src="app.js?v=1.4.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要內容</a>
@@ -179,8 +179,8 @@
             <div class="editor-wrap"><textarea id="suggestion" maxlength="3000" rows="8" disabled placeholder="你可以從這些方向思考：&#10;&#10;・報告中，哪一個觀點讓你印象深刻？&#10;・研究問題、方法或結果，有哪些值得再釐清？&#10;・對報告內容或表達方式，你有什麼具體建議？" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
             <div class="writing-heading takeaway-heading"><label for="takeaway">我對此份報告的心得</label><span id="takeaway-count">0 / 3,000</span></div>
             <div class="editor-wrap"><textarea id="takeaway" maxlength="3000" rows="6" disabled placeholder="寫下這份報告帶給你的啟發、你學到的一個觀點，或你之後想進一步了解的地方。" aria-describedby="feedback-status"></textarea><span class="editor-corner" aria-hidden="true">✳</span></div>
-            <div class="feedback-info"><p id="feedback-status" class="field-note" role="status" aria-live="polite">請先選擇報告同學與你自己的身分。</p><button id="reload-feedback" class="text-button" type="button" hidden>重新讀取</button></div>
-            <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">再次選回同一位報告者時，會帶出已儲存的建議與心得。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存建議與心得</span></button></div>
+            <div class="feedback-info"><p id="feedback-status" class="field-note" role="status" aria-live="polite">請先選擇報告同學與你自己的身分。</p></div>
+            <div class="save-area"><p><span class="tiny-dot"></span> 具體觀察・友善表達・有助改進<br><span class="save-explanation">為保護隱私，不顯示先前內容；儲存後會覆蓋上一次的建議與心得。</span></p><button id="save" class="primary-button save-button" type="button" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3h10l3 3v11H3V3zM6 3v5h7V3M6 17v-6h8v6"/></svg><span>儲存建議與心得</span></button></div>
           </section>
           </div>
         </section>

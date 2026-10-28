@@ -185,10 +185,11 @@ async function validPair(env, presenter, reviewer) {
   if (row.count !== 2) throw httpError(400, '學生資料已更新，請重新整理名單。');
 }
 
-async function readFeedback(env, presenter, reviewer) {
-  return await env.DB.prepare(`SELECT content, takeaway, revision, updated_at AS updatedAt FROM feedback
+async function feedbackMeta(env, presenter, reviewer) {
+  const row = await env.DB.prepare(`SELECT revision, updated_at AS updatedAt FROM feedback
     WHERE class_id = ? AND presenter_id = ? AND reviewer_id = ?`)
-    .bind(env.CLASS_ID, presenter, reviewer).first() || { content: '', takeaway: '', revision: 0, updatedAt: null };
+    .bind(env.CLASS_ID, presenter, reviewer).first();
+  return { exists: Boolean(row), revision: row?.revision || 0, updatedAt: row?.updatedAt || null };
 }
 
 async function presenterFeedback(env, presenter) {
@@ -230,7 +231,7 @@ async function teacherFeedback(env, presenter) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.3.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.4.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -290,7 +291,7 @@ async function route(request, env, ctx) {
     const presenter = url.searchParams.get('presenter');
     const reviewer = url.searchParams.get('reviewer');
     await validPair(env, presenter, reviewer);
-    return json(await readFeedback(env, presenter, reviewer));
+    return json(await feedbackMeta(env, presenter, reviewer));
   }
   if (path === '/api/feedback' && request.method === 'PUT') {
     const data = await bodyJSON(request);
@@ -301,17 +302,16 @@ async function route(request, env, ctx) {
       throw httpError(400, '建議與心得各限 3,000 字，且不可包含控制字元。');
     }
     if (!content.trim() && !takeaway.trim()) throw httpError(400, '請至少填寫建議或心得其中一項。');
-    if (!Number.isSafeInteger(data.revision) || data.revision < 0) throw httpError(400, '請重新讀取先前建議後再儲存。');
     const updatedAt = new Date().toISOString();
-    const result = data.revision === 0
-      ? await env.DB.prepare(`INSERT INTO feedback (class_id, presenter_id, reviewer_id, content, takeaway, revision, updated_at)
-          VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT(class_id, presenter_id, reviewer_id) DO NOTHING`)
-          .bind(env.CLASS_ID, data.presenter, data.reviewer, content, takeaway, updatedAt).run()
-      : await env.DB.prepare(`UPDATE feedback SET content = ?, takeaway = ?, revision = revision + 1, updated_at = ?
-          WHERE class_id = ? AND presenter_id = ? AND reviewer_id = ? AND revision = ?`)
-          .bind(content, takeaway, updatedAt, env.CLASS_ID, data.presenter, data.reviewer, data.revision).run();
-    if (result.meta.changes !== 1) throw httpError(409, '這份建議已在其他頁面更新。請先複製保留目前文字，再重新讀取。');
-    return json(await readFeedback(env, data.presenter, data.reviewer));
+    await env.DB.prepare(`INSERT INTO feedback (class_id, presenter_id, reviewer_id, content, takeaway, revision, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?)
+      ON CONFLICT(class_id, presenter_id, reviewer_id) DO UPDATE SET
+        content = excluded.content,
+        takeaway = excluded.takeaway,
+        revision = feedback.revision + 1,
+        updated_at = excluded.updated_at`)
+      .bind(env.CLASS_ID, data.presenter, data.reviewer, content, takeaway, updatedAt).run();
+    return json({ ok: true, ...(await feedbackMeta(env, data.presenter, data.reviewer)) });
   }
   const match = path.match(/^\/api\/papers\/([a-f0-9]{24})$/);
   if (match && request.method === 'GET') {
@@ -341,7 +341,7 @@ export default {
     if (origin && allowed) {
       headers['Access-Control-Allow-Origin'] = origin;
       headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
-      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Teacher-Token';
       headers['Access-Control-Expose-Headers'] = 'Content-Disposition';
     }
     let response;

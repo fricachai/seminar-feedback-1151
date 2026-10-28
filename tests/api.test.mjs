@@ -22,8 +22,13 @@ function sql(query){
 async function api(path,{method='GET',body,auth=true,headers={}}={}){
  return fetch(base+path,{method,headers:{...(auth&&token?{Authorization:`Bearer ${token}`} : {}),...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
 }
-async function feedback(presenter=ids[0],reviewer=ids[1]){
+async function feedbackMeta(presenter=ids[0],reviewer=ids[1]){
  const r=await api(`/api/feedback?presenter=${presenter}&reviewer=${reviewer}`);assert.equal(r.status,200);return r.json();
+}
+function stored(presenter=ids[0],reviewer=ids[1]){
+ const out=sql(`SELECT content,takeaway,revision FROM feedback WHERE presenter_id='${presenter}' AND reviewer_id='${reviewer}';`);
+ const rows=JSON.parse(out)[0]?.results || [];
+ return rows[0] || null;
 }
 before(async()=>{
  const r=await api('/api/session',{method:'POST',auth:false,body:{code}});assert.equal(r.status,200);
@@ -53,8 +58,8 @@ test('未通關不能讀名單、建議、PDF 或執行雲端更新',async()=>{
 test('不允許其他網站跨來源取得資料',async()=>{
  const r=await api('/api/catalog',{headers:{Origin:'https://untrusted.example'}});assert.equal(r.status,403);assert.equal(r.headers.has('access-control-allow-origin'),false);
 });
-test('正式網站來源可通過 CORS 預檢',async()=>{
- const r=await api('/api/catalog',{method:'OPTIONS',auth:false,headers:{Origin:'https://fricachai.github.io'}});assert.equal(r.status,204);assert.equal(r.headers.get('access-control-allow-origin'),'https://fricachai.github.io');
+test('正式網站來源可通過 CORS 預檢，含教師自訂標頭',async()=>{
+ const r=await api('/api/catalog',{method:'OPTIONS',auth:false,headers:{Origin:'https://fricachai.github.io','Access-Control-Request-Headers':'x-teacher-token'}});assert.equal(r.status,204);assert.equal(r.headers.get('access-control-allow-origin'),'https://fricachai.github.io');assert.match(r.headers.get('access-control-allow-headers'),/X-Teacher-Token/i);
 });
 test('名單與來源一致，未上傳學生的文章陣列為空',async()=>{
  const r=await api('/api/catalog');assert.equal(r.status,200);const data=await r.json();
@@ -64,26 +69,29 @@ test('名單與來源一致，未上傳學生的文章陣列為空',async()=>{
  assert.equal(actual.filter(s=>s.papers.length).length,6);assert.equal(actual.filter(s=>!s.papers.length).length,29);
  assert.equal(r.headers.get('cache-control'),'no-store, private');
 });
-test('新增建議可以儲存並從資料庫重新讀回，保留引號與換行',async()=>{
- const empty=await feedback();assert.equal(empty.revision,0);assert.equal(empty.content,'');
+test('新增建議可以儲存，公開讀取只回傳是否存在，不帶出建議內容',async()=>{
+ const empty=await feedbackMeta();assert.equal(empty.exists,false);assert.equal(empty.revision,0);assert.equal(Object.hasOwn(empty,'content'),false);assert.equal(Object.hasOwn(empty,'takeaway'),false);
  const content="[AUTOMATED-VERIFY] 具體觀察：'引號'、換行\n<script>不應執行</script>";
- const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[0],reviewer:ids[1],content,revision:0}});assert.equal(r.status,200);
- const saved=await feedback();assert.equal(saved.content,content);assert.equal(saved.revision,1);assert.ok(saved.updatedAt);
+ const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[0],reviewer:ids[1],content}});assert.equal(r.status,200);
+ const saved=await feedbackMeta();assert.equal(saved.exists,true);assert.equal(saved.revision,1);assert.ok(saved.updatedAt);
+ const row=stored();assert.equal(row.content,content);assert.equal(row.takeaway,'');
 });
 test('建議依報告者與填寫者隔離，其他配對不會讀到',async()=>{
- assert.equal((await feedback(ids[0],ids[2])).content,'');assert.equal((await feedback(ids[2],ids[1])).content,'');
+ assert.equal(stored(ids[0],ids[2]),null);assert.equal(stored(ids[2],ids[1]),null);
 });
-test('同一配對的並行修改只有一筆成功，另一筆需重新讀取',async()=>{
- const responses=await Promise.all(['更新甲','更新乙'].map(content=>api('/api/feedback',{method:'PUT',body:{presenter:ids[0],reviewer:ids[1],content:'[AUTOMATED-VERIFY] '+content,revision:1}})));
- assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);assert.equal((await feedback()).revision,2);
+test('同一配對再次儲存以最後一次為準，不新增第二筆',async()=>{
+ const first=await api('/api/feedback',{method:'PUT',body:{presenter:ids[0],reviewer:ids[1],content:'[AUTOMATED-VERIFY] 更新甲'}});assert.equal(first.status,200);
+ const second=await api('/api/feedback',{method:'PUT',body:{presenter:ids[0],reviewer:ids[1],content:'[AUTOMATED-VERIFY] 更新乙'}});assert.equal(second.status,200);
+ const row=stored();assert.equal(row.content,'[AUTOMATED-VERIFY] 更新乙');assert.equal(row.revision,3);
+ const count=JSON.parse(sql(`SELECT COUNT(*) AS count FROM feedback WHERE presenter_id='${ids[0]}' AND reviewer_id='${ids[1]}';`))[0].results[0].count;assert.equal(count,1);
 });
 test('新增第二個配對不覆蓋第一個配對',async()=>{
- const first=await feedback();const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[2],reviewer:ids[1],content:'[AUTOMATED-VERIFY] 第二份建議',revision:0}});assert.equal(r.status,200);assert.equal((await feedback()).content,first.content);
+ const first=stored();const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[2],reviewer:ids[1],content:'[AUTOMATED-VERIFY] 第二份建議'}});assert.equal(r.status,200);assert.equal(stored().content,first.content);
 });
 test('禁止自己對自己填寫、未知學號、空白與過長內容',async()=>{
- const cases=[{presenter:ids[0],reviewer:ids[0],content:'x'},{presenter:'00000000',reviewer:ids[1],content:'x'},{presenter:ids[0],reviewer:ids[1],content:'  '},{presenter:ids[0],reviewer:ids[1],content:'x'.repeat(5001)}];
- for(const c of cases){const r=await api('/api/feedback',{method:'PUT',body:{...c,revision:2}});assert.equal(r.status,400);}
- assert.equal((await feedback()).revision,2);
+ const cases=[{presenter:ids[0],reviewer:ids[0],content:'x'},{presenter:'00000000',reviewer:ids[1],content:'x'},{presenter:ids[0],reviewer:ids[1],content:'  '},{presenter:ids[0],reviewer:ids[1],content:'x'.repeat(3001)}];
+ for(const c of cases){const r=await api('/api/feedback',{method:'PUT',body:c});assert.equal(r.status,400);}
+ assert.equal(stored().revision,3);
 });
 test('過期工作階段不能讀取資料',async()=>{
  const expired=randomBytes(32).toString('base64url'),tokenHash=hash(expired);tokenHashes.push(tokenHash);
@@ -96,21 +104,21 @@ test('PDF 經通關後下載，內容與原始檔雜湊一致',async()=>{
  const bytes=Buffer.from(await r.arrayBuffer());const expected=JSON.parse(readFileSync(resolve(root,'.private/manifest.json'),'utf8')).papers.map(p=>p.sha256);
  assert.equal(expected.includes(hash(bytes)),true);assert.ok(r.headers.get('content-disposition').startsWith('attachment;'));
 });
-test('建議與心得可分別儲存，重新讀回保留兩欄，後寫入者覆蓋原內容',async()=>{
+test('建議與心得可分別儲存，後寫入者覆蓋原內容',async()=>{
  const content='[AUTOMATED-VERIFY] 建議內容', takeaway='[AUTOMATED-VERIFY] 心得內容';
- const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content,takeaway,revision:0}});assert.equal(r.status,200);
- const saved=await feedback(ids[1],ids[2]);assert.equal(saved.content,content);assert.equal(saved.takeaway,takeaway);assert.equal(saved.revision,1);
- const updated=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content:'[AUTOMATED-VERIFY] 新版建議',takeaway:'[AUTOMATED-VERIFY] 新版心得',revision:1}});assert.equal(updated.status,200);
- const latest=await feedback(ids[1],ids[2]);assert.equal(latest.content,'[AUTOMATED-VERIFY] 新版建議');assert.equal(latest.takeaway,'[AUTOMATED-VERIFY] 新版心得');assert.equal(latest.revision,2);
+ const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content,takeaway}});assert.equal(r.status,200);
+ const saved=stored(ids[1],ids[2]);assert.equal(saved.content,content);assert.equal(saved.takeaway,takeaway);assert.equal(saved.revision,1);
+ const updated=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[2],content:'[AUTOMATED-VERIFY] 新版建議',takeaway:'[AUTOMATED-VERIFY] 新版心得'}});assert.equal(updated.status,200);
+ const latest=stored(ids[1],ids[2]);assert.equal(latest.content,'[AUTOMATED-VERIFY] 新版建議');assert.equal(latest.takeaway,'[AUTOMATED-VERIFY] 新版心得');assert.equal(latest.revision,2);
 });
 test('只填心得、不填建議也可以儲存',async()=>{
- const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[0],content:'',takeaway:'[AUTOMATED-VERIFY] 只有心得',revision:0}});assert.equal(r.status,200);
- const saved=await feedback(ids[1],ids[0]);assert.equal(saved.content,'');assert.equal(saved.takeaway,'[AUTOMATED-VERIFY] 只有心得');
+ const r=await api('/api/feedback',{method:'PUT',body:{presenter:ids[1],reviewer:ids[0],content:'',takeaway:'[AUTOMATED-VERIFY] 只有心得'}});assert.equal(r.status,200);
+ const saved=stored(ids[1],ids[0]);assert.equal(saved.content,'');assert.equal(saved.takeaway,'[AUTOMATED-VERIFY] 只有心得');
 });
 test('建議與心得各限 3,000 字，空白與超限拒絕',async()=>{
  const base={presenter:ids[0],reviewer:ids[2]};
- const ok=await api('/api/feedback',{method:'PUT',body:{...base,content:'x'.repeat(3000),takeaway:'y'.repeat(3000),revision:0}});assert.equal(ok.status,200);
- for(const body of [{...base,content:'x'.repeat(3001),takeaway:'',revision:1},{...base,content:'',takeaway:'y'.repeat(3001),revision:1},{...base,content:'  ',takeaway:'  ',revision:1}]){
+ const ok=await api('/api/feedback',{method:'PUT',body:{...base,content:'x'.repeat(3000),takeaway:'y'.repeat(3000)}});assert.equal(ok.status,200);
+ for(const body of [{...base,content:'x'.repeat(3001),takeaway:''},{...base,content:'',takeaway:'y'.repeat(3001)},{...base,content:'  ',takeaway:'  '}]){
   const r=await api('/api/feedback',{method:'PUT',body});assert.equal(r.status,400);
  }
 });

@@ -77,9 +77,10 @@ async function applyView(view) {
     if (!leave) { history.replaceState(null, '', '#upload'); return; }
   }
   if (state.view === 'feedback' && dirty()) {
-    const leave = await confirmDiscard('目前的建議或心得尚未儲存。仍要離開這個頁面嗎？返回後可繼續填寫，內容不會自動儲存。');
+    const leave = await confirmDiscard('目前的建議或心得尚未儲存。離開後內容會清空，仍要離開這個頁面嗎？');
     if (!leave) { history.replaceState(null, '', '#feedback'); return; }
   }
+  if (state.view === 'feedback') clearFeedbackDraft();
   showViewNow(view);
 }
 
@@ -118,7 +119,7 @@ function authError(error) {
   $('gate').hidden = false;
   $('classroom').hidden = true;
   $('logout').hidden = true;
-  message('login-status', '課程連線已到期，請重新輸入通關碼。尚未儲存的文字會暫留在此頁。', 'error');
+  message('login-status', '課程連線已到期，請重新輸入通關碼。尚未儲存的文字請先複製保留。', 'error');
   $('class-code').focus();
   return true;
 }
@@ -362,42 +363,28 @@ function renderPresentations() {
   }
 }
 
-async function loadPair() {
-  const seq = ++state.loadSeq;
-  state.controller?.abort();
-  state.controller = new AbortController();
+function clearFeedbackDraft() {
   state.ready = false;
   state.originalContent = '';
   state.originalTakeaway = '';
   state.revision = 0;
   $('suggestion').value = '';
   $('takeaway').value = '';
-  $('reload-feedback').hidden = true;
   updateControls();
+}
+
+function loadPair() {
+  clearFeedbackDraft();
   if (!state.presenter || !state.reviewer) {
     setBadge('尚未開始'); message('feedback-status', '請先選擇報告同學與你自己的身分。'); return;
   }
   if (!pairIsValid()) {
     setBadge('請確認身分'); message('feedback-status', '你是這次的報告者，請選擇其他同學的報告再留下建議。'); return;
   }
-  setBadge('讀取中…'); message('feedback-status', '正在確認這組報告者與填寫者的先前建議與心得…');
-  const presenter = state.presenter, reviewer = state.reviewer;
-  try {
-    const data = await api(`/api/feedback?presenter=${encodeURIComponent(presenter)}&reviewer=${encodeURIComponent(reviewer)}`, { signal: state.controller.signal });
-    if (seq !== state.loadSeq || presenter !== state.presenter || reviewer !== state.reviewer) return;
-    state.originalContent = data.content || '';
-    state.originalTakeaway = data.takeaway || '';
-    state.revision = data.revision; state.ready = true;
-    $('suggestion').value = state.originalContent;
-    $('takeaway').value = state.originalTakeaway;
-    message('feedback-status', data.updatedAt ? `已帶入先前建議與心得・上次儲存 ${formatTime(data.updatedAt)}` : '還沒有儲存過建議或心得。寫下你的觀察，再按下方按鈕儲存。');
-    updateControls();
-  } catch (error) {
-    if (seq !== state.loadSeq || error.name === 'AbortError') return;
-    setBadge('尚未讀取');
-    message('feedback-status', error.message, 'error'); $('reload-feedback').hidden = false;
-    authError(error);
-  }
+  state.ready = true;
+  setBadge('等待你的建議');
+  message('feedback-status', '請輸入建議或心得。為保護隱私，不顯示先前內容；儲存後會覆蓋上一次的內容。');
+  updateControls();
 }
 
 async function loadReceived({ announce = true } = {}) {
@@ -654,13 +641,13 @@ async function loadCatalog({ preserve = false, pair = true } = {}) {
 }
 
 async function enterClassroom() {
-  const preserve = state.authenticatedBefore && dirty() && pairIsValid();
-  await loadCatalog({ preserve });
+  const hadDraft = state.authenticatedBefore && dirty() && pairIsValid();
+  await loadCatalog();
   state.authenticatedBefore = true;
   $('gate').hidden = true; $('classroom').hidden = false; $('logout').hidden = false;
   $('class-code').value = '';
   showViewNow('home');
-  if (preserve) message('feedback-status', '已重新連線。先前尚未儲存的文字仍保留，請按「儲存建議與心得」。');
+  if (hadDraft) message('feedback-status', '已重新連線。為保護隱私，建議與心得欄位已清空；如需保留先前文字，請先複製。');
 }
 
 $('login-form').addEventListener('submit', async event => {
@@ -700,31 +687,22 @@ for (const id of ['suggestion', 'takeaway']) {
 $('save').addEventListener('click', async () => {
   if ($('save').disabled) return;
   const presenter = state.presenter, reviewer = state.reviewer;
-  const content = $('suggestion').value, takeaway = $('takeaway').value, revision = state.revision;
+  const content = $('suggestion').value, takeaway = $('takeaway').value;
   state.saving = true; updateControls(); $('save').querySelector('span').textContent = '正在儲存…';
-  message('feedback-status', '正在儲存，請稍候…'); $('reload-feedback').hidden = true;
+  message('feedback-status', '正在儲存，請稍候…');
   try {
-    const saved = await api('/api/feedback', { method: 'PUT', body: JSON.stringify({ presenter, reviewer, content, takeaway, revision }) });
-    // Read through the API again, so the success indicator reflects durable server data.
-    const checked = await api(`/api/feedback?presenter=${encodeURIComponent(presenter)}&reviewer=${encodeURIComponent(reviewer)}`);
-    if (checked.content !== content || (checked.takeaway || '') !== takeaway || checked.revision !== saved.revision) throw Object.assign(new Error('資料已在另一個頁面變更。請先複製保留目前文字，再重新讀取。'), { status: 409 });
-    state.originalContent = content; state.originalTakeaway = takeaway; state.revision = checked.revision;
-    message('feedback-status', `已儲存並確認・${formatTime(checked.updatedAt)}。之後仍可修改並再次儲存。`, 'success');
+    const saved = await api('/api/feedback', { method: 'PUT', body: JSON.stringify({ presenter, reviewer, content, takeaway }) });
+    state.originalContent = content; state.originalTakeaway = takeaway; state.revision = saved.revision || 0;
+    message('feedback-status', `已儲存並確認・${formatTime(saved.updatedAt)}。再次儲存會覆蓋本次內容。`, 'success');
   } catch (error) {
     message('feedback-status', error.message, 'error');
-    if (error.status === 409 || !error.status || error.status >= 500) {
-      $('reload-feedback').hidden = false;
-      if (error.status !== 409) message('feedback-status', '連線中斷，尚未確認是否儲存成功。請先複製文字，再重新讀取核對。', 'error');
+    if (!error.status || error.status >= 500) {
+      message('feedback-status', '連線中斷，尚未確認是否儲存成功。請先複製文字，再重新操作。', 'error');
     }
     authError(error);
   } finally {
     state.saving = false; updateControls(); $('save').querySelector('span').textContent = '儲存建議與心得';
   }
-});
-
-$('reload-feedback').addEventListener('click', async () => {
-  if (dirty() && !await confirmDiscard('重新讀取會以資料庫內容取代目前的建議與心得。請先複製保留需要的修改，再選擇是否繼續。')) return;
-  await loadPair();
 });
 
 $('progress-student').addEventListener('change', () => loadProgress());
