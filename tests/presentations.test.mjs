@@ -132,7 +132,7 @@ test('重新上傳文章會覆蓋舊文章，只保留最新一份',()=>{
   const catalog=f.context.catalog_(f.root,[student]);
   assert.equal(catalog.papers.length,1);assert.equal(catalog.papers[0].filename,'2025_更新文章.pdf');
   assert.equal(folder.files.filter(file=>!file.trashed).length,1);assert.equal(folder.files.filter(file=>!file.trashed)[0].getName(),'2025_更新文章.pdf');
-  assert.equal(old.trashed,false);
+  assert.equal(old.trashed,true);
 });
 test('Google 端獨立拒絕文章超限、空白篇名、冒用學生與重複身分資料夾',()=>{
   const f=fixture(),p=validatePaper(paperPayload());

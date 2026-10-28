@@ -109,29 +109,15 @@ function categoryFiles_(folder, category) {
   return list;
 }
 function replaceCategoryFile_(folder, category, blob, filename, marker) {
-  var existing = categoryFiles_(folder, category), target = null;
-  if (existing.length) {
-    target = existing[0];
-    var extension = filename.match(/\.[a-z0-9]+$/i)[0].toLowerCase();
-    var sameType = target.getMimeType() === blob.getContentType() &&
-      target.getName().toLowerCase().slice(-extension.length) === extension;
-    if (sameType) {
-      target.setContent(blob);
-      target.setName(filename);
-      target.setDescription(marker);
-    } else {
-      target = folder.createFile(blob);
-      try { target.setDescription(marker); }
-      catch (error) { target.setTrashed(true); throw error; }
-    }
-    for (var i = 0; i < existing.length; i++) {
-      if (existing[i].getId() !== target.getId() && !existing[i].isTrashed()) existing[i].setTrashed(true);
-    }
-    return target;
-  }
+  // Create the new file first so a failed upload never destroys the previous one.
+  // The new file keeps a clean Drive MIME type and size; after it exists, retire old files.
+  var existing = categoryFiles_(folder, category);
   var created = folder.createFile(blob);
   try { created.setDescription(marker); }
   catch (error) { created.setTrashed(true); throw error; }
+  for (var i = 0; i < existing.length; i++) {
+    if (!existing[i].isTrashed()) existing[i].setTrashed(true);
+  }
   return created;
 }
 function uploadPresentation_(root,students,p) {
