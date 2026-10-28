@@ -453,13 +453,7 @@ function renderReceivedView() {
 function renderProgressItems(items) {
   const area = $('progress-list');
   area.replaceChildren();
-  if (!items?.length) {
-    const note = document.createElement('p');
-    note.className = 'field-note';
-    note.textContent = '尚未完成任何報告同學的建議或心得。';
-    area.append(note);
-    return;
-  }
+  if (!items?.length) return;
   const list = document.createElement('ul');
   list.className = 'progress-items';
   for (const item of items) {
