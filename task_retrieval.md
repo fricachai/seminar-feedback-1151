@@ -12,7 +12,7 @@
 - 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。
 - 資料庫：`0005_feedback_takeaway_teacher.sql` 新增 takeaway 與 teacher_sessions；`0006_feedback_relax_content.sql` 重建 feedback 檢查，允許「建議或心得至少一項」且各限 3,000 字。
 - 實讀：根目錄與 `seminar-feedback/OPENCODE_HANDOFF.md`、`README.md`、`task_retrieval.md`；`worker/`、`public/`、`migrations/`、`tests/`、`google-apps-script/`；Obsidian Google 表單 SOP 的課程網站串接與上傳節。
-- 介面修正：上傳頁切換學號姓名時清空文章／簡報的已選檔案、檔名與狀態訊息，避免上一位的「已儲存…」殘留；清單標題改為「目前上傳文章的狀態：」與「目前上傳簡報的狀態：」。
+- 介面修正：上傳頁切換學號姓名時清空文章／簡報的已選檔案、檔名與狀態訊息，避免上一位的「已儲存…」殘留；清單標題為「目前上傳文章的狀態：」與「目前上傳簡報的狀態：」，字級與「已更新雲端資料：…」同為 12px。空檔與超過 5MB 分開提示，超限顯示「檔案大小超過 5MB！」。
 - 驗證：`npm run check`；36 項本機測試（含雙欄、只填心得、3,000 字邊界、公開讀取不含內容、匿名查看、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋）；假資料瀏覽器流程；正式 D1 `0005`／`0006`、Worker `1.4.0`、Pages `40621661887`、正式站五份資源比對與 CORS 預檢。390 新畫面視覺與正式再次上傳覆蓋未另做端到端，不宣稱通過。
 
 ## 2026-10-27｜學習入口與文章／簡報上傳頁
