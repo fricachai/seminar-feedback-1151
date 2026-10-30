@@ -7,7 +7,7 @@
 - 使用者需求：回饋頁建議改為「我對報告同學的建議」與「我對此份報告的心得」，各 3,000 字；首頁新增 03 查看給自己的建議（不顯示填寫者資訊）；上傳頁下方新增填寫進度；文章／簡報再次上傳覆蓋舊檔；回饋頁新增教師管理登入與管理頁；用字適當美化。
 - 教師帳密：使用者明確表示由本人設定，且已完成設定並登入教師管理。本輪未產生、未讀取、未記錄任何教師帳密；實作使用 Cloudflare secrets `TEACHER_USERNAME`／`TEACHER_PASSWORD_HASH`，並提供 `scripts/set-teacher-credentials.mjs` 供日後更換。未設定時教師登入回 `503 TEACHER_NOT_CONFIGURED`。
 - 覆蓋規則：同一位學生的文章只保留一份、簡報只保留一份；Apps Script 採「先建立新檔，成功後把舊檔移至垃圾桶」，Worker 上傳後停用該生其他舊索引。再次輸入建議／心得更新同一組主鍵，以最後一次儲存為準。正式橋接已更新至版本 7；版本 6 曾使用 `File.setContent()`，造成 Drive 檔案 MIME／大小不完整與 Worker 回報「雲端文章／簡報資訊不完整」，已改為建立新檔。
-- 隱私邊界：選取報告者後不讀取、不顯示先前建議／心得，兩欄一律空白開始；公開 `GET /api/feedback` 只回傳是否存在與版本時間，不回傳文字；離開回饋頁清空草稿。`/api/presenter-feedback` 只回傳建議字串，不查詢或回傳 reviewer 欄位；教師端 `/api/teacher/feedback` 才回傳 reviewer 學號姓名，且必須通過獨立教師工作階段。
+- 隱私邊界：選取報告者後不讀取、不顯示先前建議／心得，兩欄一律空白開始；公開 `GET /api/feedback` 只回傳是否存在與版本時間，不回傳文字；離開回饋頁清空草稿。`/api/presenter-feedback` 只回傳建議字串，不查詢或回傳 reviewer 欄位，且每次請求以 Fisher-Yates 隨機排序，不依學號或時間固定排序；教師端 `/api/teacher/feedback` 才回傳 reviewer 學號姓名，且必須通過獨立教師工作階段。
 - CORS：教師 API 使用 `X-Teacher-Token`，Worker 的 `Access-Control-Allow-Headers` 必須包含此標頭；已補上並以正式 OPTIONS 預檢驗證。
 - 進度邊界：`/api/student-progress` 只回傳已完成建議或心得的 presenter 與兩個完成旗標，不回傳建議／心得文字；依 presenter 學號排序。空狀態只由上方狀態訊息顯示一次，列表區不再重複插入同一句。
 - 教師刪除：教師管理每個區塊提供「刪除這筆」，使用頁面內確認視窗；`DELETE /api/teacher/feedback` 僅接受教師工作階段，刪除單一 presenter／reviewer 的建議與心得。學生端沒有刪除端點。
