@@ -5,7 +5,7 @@ import {createHash,randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
 import {command} from '../scripts/command.mjs';
-import worker from '../worker/index.js';
+import worker,{shuffled} from '../worker/index.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const base=process.env.SEMINAR_TEST_API||'http://127.0.0.1:8787';
@@ -135,6 +135,13 @@ test('查看給我的建議只回傳建議文字，不包含填寫者資訊',asy
  const r=await api(`/api/presenter-feedback?presenter=${ids[0]}`);assert.equal(r.status,200);const data=await r.json();
  assert.deepEqual(Object.keys(data).sort(),['count','suggestions']);assert.equal(data.count,data.suggestions.length);assert.ok(data.suggestions.every(item=>typeof item==='string'));
  assert.equal(JSON.stringify(data).includes(ids[1]),false);
+});
+test('建議列表以 Fisher-Yates 隨機洗牌，不保留固定學號順序',()=>{
+ const input=['A','B','C','D'],calls=[];
+ const result=shuffled(input,max=>{calls.push(max);return 0;});
+ assert.deepEqual(result,['B','C','D','A']);
+ assert.deepEqual(calls,[4,3,2]);
+ assert.deepEqual([...result].sort(),['A','B','C','D']);
 });
 test('填寫進度只列出已完成項目，且依報告者學號排序',async()=>{
  const r=await api(`/api/student-progress?reviewer=${ids[2]}`);assert.equal(r.status,200);const data=await r.json();

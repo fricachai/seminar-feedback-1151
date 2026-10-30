@@ -192,6 +192,14 @@ async function feedbackMeta(env, presenter, reviewer) {
   return { exists: Boolean(row), revision: row?.revision || 0, updatedAt: row?.updatedAt || null };
 }
 
+export function shuffled(items, randomInt = max => crypto.getRandomValues(new Uint32Array(1))[0] % max) {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
 async function presenterFeedback(env, presenter) {
   if (!/^\d{8}$/.test(presenter || '')) throw httpError(400, '請選擇報告者。');
   const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(presenter).first();
@@ -199,7 +207,7 @@ async function presenterFeedback(env, presenter) {
   const rows = await env.DB.prepare(`SELECT f.content FROM feedback f JOIN students s ON s.id = f.reviewer_id
     WHERE f.class_id = ? AND f.presenter_id = ? AND s.active = 1 AND length(trim(f.content)) > 0
     ORDER BY f.updated_at, f.reviewer_id`).bind(env.CLASS_ID, presenter).all();
-  const suggestions = rows.results.map(row => row.content);
+  const suggestions = shuffled(rows.results.map(row => row.content));
   return json({ suggestions, count: suggestions.length });
 }
 
@@ -238,7 +246,7 @@ async function teacherFeedback(env, presenter) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.7.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.8.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
