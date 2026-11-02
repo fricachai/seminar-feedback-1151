@@ -9,9 +9,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.workers.dev http://127.0.0.1:8787 http://localhost:8787; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>專題討論（1）・共學筆記</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=1.7.1">
-  <script src="config.js?v=1.7.1" defer></script>
-  <script src="app.js?v=1.7.1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=1.9.0">
+  <script src="config.js?v=1.9.0" defer></script>
+  <script src="app.js?v=1.9.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳至主要內容</a>
@@ -76,6 +76,13 @@
               <p>選擇自己的學號與姓名，查看同學對你報告的建議；不顯示提供建議的同學資訊。</p>
               <span class="home-card-action">前往查看 <span aria-hidden="true">→</span></span>
             </a>
+            <a class="home-card" href="#final">
+              <span class="home-card-number">04</span>
+              <span class="section-kicker">FINAL PAPER PRESENTATION</span>
+              <h2>上傳期末個人論文簡報</h2>
+              <p>選擇自己的學號與姓名，上傳期末個人論文簡報 PPT、PPTX 或 PDF；再次上傳會覆蓋先前檔案。</p>
+              <span class="home-card-action">前往上傳與確認 <span aria-hidden="true">→</span></span>
+            </a>
           </nav>
           <p class="home-footnote"><span class="tiny-dot"></span> 文章閱讀 <span aria-hidden="true">／</span> 專注聆聽 <span aria-hidden="true">／</span> 具體回饋</p>
         </section>
@@ -126,6 +133,47 @@
             </div>
             <div id="progress-list" class="progress-list"><p class="field-note">尚未選擇身分。</p></div>
             <div class="progress-actions"><p class="field-note">只列出已完成的報告同學；未完成的不顯示。</p><button id="progress-reload" class="text-button" type="button">重新讀取</button></div>
+          </section>
+        </section>
+
+        <section id="view-final" class="view final-view" hidden aria-labelledby="final-title">
+          <div class="view-heading">
+            <a class="text-button back-link" href="#home"><span aria-hidden="true">←</span> 返回學習入口</a>
+            <p class="eyebrow"><span></span> FINAL PAPER PRESENTATION</p>
+            <h1 id="final-title">期末個人論文簡報</h1>
+            <p class="intro-description">先選擇自己的學號與姓名，上傳期末個人論文簡報；再到下方確認 Google 雲端是否已有檔案並下載。</p>
+          </div>
+          <section class="panel material-panel" aria-labelledby="final-upload-heading">
+            <div class="panel-heading"><span class="section-number">01</span><div><p class="section-kicker">UPLOAD FINAL PRESENTATION</p><h2 id="final-upload-heading">上傳期末個人論文簡報</h2></div></div>
+            <form id="final-form" class="material-form">
+              <div class="material-identity">
+                <label for="final-uploader">請選擇自己的學號與姓名</label>
+                <div class="select-wrap"><select id="final-uploader" required><option value="">請選擇自己的學號與姓名</option></select></div>
+                <p id="final-lookup-status" class="field-note" role="status" aria-live="polite">選擇身分後，會自動更新雲端期末簡報。</p>
+              </div>
+              <div class="material-grid single">
+                <div class="material-field">
+                  <label for="final-file">期末個人論文簡報（PPT／PPTX／PDF）</label>
+                  <div class="upload-file-wrap"><label for="final-file" class="upload-file-label">選擇期末簡報檔 <span aria-hidden="true">↑</span></label><input id="final-file" type="file" accept=".ppt,.pptx,.pdf" aria-describedby="final-help final-status"><span id="final-filename" class="upload-filename">尚未選擇檔案</span></div>
+                  <p id="final-help" class="field-note">檔名不限；送出後會自動命名為「學號_期末個人論文簡報.副檔名」，例：12345678_期末個人論文簡報.pptx。限 PPT、PPTX 或 PDF，5 MB 以內；再次上傳會覆蓋先前的期末簡報檔。</p>
+                  <p id="final-status" class="field-note" role="status" aria-live="polite"></p>
+                  <div class="upload-existing"><p class="upload-existing-label">目前上傳期末簡報的狀態：</p><div id="final-existing" class="upload-existing-list"><p class="field-note">請先選擇自己的學號與姓名。</p></div></div>
+                </div>
+              </div>
+              <div class="material-actions">
+                <p id="final-material-status" class="field-note" role="status" aria-live="polite">選擇檔案後送出；再次上傳會覆蓋先前的期末簡報檔。</p>
+                <button id="final-submit" class="primary-button" type="submit" disabled>送出 <span aria-hidden="true">→</span></button>
+              </div>
+            </form>
+          </section>
+          <section class="panel progress-panel final-check-panel" aria-labelledby="final-check-heading">
+            <div class="panel-heading"><span class="section-number">02</span><div><p class="section-kicker">CHECK FINAL PRESENTATION</p><h2 id="final-check-heading">確認期末簡報</h2></div></div>
+            <div class="progress-identity">
+              <label for="final-checker">請選擇自己的學號與姓名</label>
+              <div class="select-wrap"><select id="final-checker"><option value="">請選擇自己的學號與姓名</option></select></div>
+              <p id="final-check-status" class="field-note" role="status" aria-live="polite">選擇身分後，會同步 Google 雲端資料夾並確認期末簡報。</p>
+            </div>
+            <div id="final-check-result" class="final-check-result"><p class="field-note">請先選擇自己的學號與姓名。</p></div>
           </section>
         </section>
 

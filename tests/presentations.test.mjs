@@ -4,12 +4,14 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {validatePresentation,MAX_PRESENTATION_BYTES} from '../worker/presentations.js';
+import {validateFinalPresentation,FINAL_PRESENTATION_NAME} from '../worker/final-presentations.js';
 import {validatePaper,MAX_PAPER_BYTES} from '../worker/papers.js';
 import worker from '../worker/index.js';
 
 const student = {id:'99990001',name:'測試同學'};
 const pdf = Buffer.from('%PDF-1.4\nTest presentation\n%%EOF');
 const payload = (bytes=pdf,filename='report.pdf')=>({studentId:student.id,filename,data:bytes.toString('base64'),uploadId:randomUUID()});
+const finalPayload = (bytes=Buffer.from('504b030478797a','hex'),filename='final.pptx')=>({studentId:student.id,filename,data:bytes.toString('base64'),uploadId:randomUUID()});
 const paperPayload = (bytes=pdf,filename='2024_測試文章.pdf')=>({studentId:student.id,filename,data:bytes.toString('base64'),uploadId:randomUUID()});
 const source = readFileSync(new URL('../google-apps-script/Code.gs',import.meta.url),'utf8');
 function fixture() {
@@ -77,6 +79,56 @@ test('重新上傳不同格式簡報會汰換舊檔，不留下兩份',()=>{
   const catalog=f.context.catalog_(f.root,[student]);
   assert.equal(catalog.presentations.length,1);assert.equal(folder.files.filter(file=>!file.trashed).length,1);
   assert.equal(catalog.presentations[0].filename,`${student.id}.pptx`);
+});
+test('期末簡報自動命名為學號_期末個人論文簡報，接受三種格式',()=>{
+  for(const [extension,bytes] of [['pdf',pdf],['pptx',Buffer.from('504b030478797a','hex')],['ppt',Buffer.from('d0cf11e0a1b11ae1','hex')]]) {
+    const result=validateFinalPresentation(finalPayload(bytes,`任意名稱.${extension.toUpperCase()}`));
+    assert.equal(result.filename,`${student.id}_${FINAL_PRESENTATION_NAME}.${extension}`);
+    assert.equal(result.byteSize,bytes.length);
+  }
+});
+test('期末簡報 5 MB 邊界可上傳；多 1 byte、空檔、假副檔名拒絕',()=>{
+  const boundary=Buffer.alloc(MAX_PRESENTATION_BYTES,32);pdf.copy(boundary);
+  assert.equal(validateFinalPresentation(finalPayload(boundary,'boundary.pdf')).byteSize,MAX_PRESENTATION_BYTES);
+  assert.throws(()=>validateFinalPresentation(finalPayload(Buffer.concat([boundary,Buffer.from('x')]),'over.pdf')),/5MB/);
+  assert.throws(()=>validateFinalPresentation({...finalPayload(Buffer.alloc(0),'empty.pdf'),data:''}),/不可為空/);
+  assert.throws(()=>validateFinalPresentation(finalPayload(Buffer.from('not pdf'),'file.exe')),/PPT/);
+  assert.throws(()=>validateFinalPresentation(finalPayload(Buffer.from('not pdf'),'file.pdf')),/內容與副檔名/);
+});
+test('期末簡報與報告簡報分流，重傳只汰換期末檔',()=>{
+  const f=fixture(),folder=f.addFolder(`${student.id} ${student.name}`);
+  f.context.uploadPresentation_(f.root,[student],validatePresentation(payload()));
+  const first=validateFinalPresentation(finalPayload());
+  const uploaded=f.context.uploadFinalPresentation_(f.root,[student],first);
+  const retried=f.context.uploadFinalPresentation_(f.root,[student],first);
+  assert.equal(uploaded.presentation.driveFileId,retried.presentation.driveFileId);
+  const mixed=f.context.catalog_(f.root,[student]);
+  assert.equal(mixed.papers.length,0);assert.equal(mixed.presentations.length,1);assert.equal(mixed.finalPresentations.length,1);
+  assert.equal(mixed.finalPresentations[0].filename,`${student.id}_${FINAL_PRESENTATION_NAME}.pptx`);
+  assert.equal(folder.files.filter(file=>!file.trashed).length,2);
+  f.context.uploadFinalPresentation_(f.root,[student],validateFinalPresentation(finalPayload(pdf,'new.pdf')));
+  const updated=f.context.catalog_(f.root,[student]);
+  assert.equal(updated.presentations.length,1);assert.equal(updated.finalPresentations.length,1);
+  assert.equal(updated.finalPresentations[0].filename,`${student.id}_${FINAL_PRESENTATION_NAME}.pdf`);
+  assert.equal(folder.files.filter(file=>!file.trashed).length,2);
+});
+test('Google 端拒絕冒用期末簡報檔名與身分',()=>{
+  const f=fixture(),p=validateFinalPresentation(finalPayload());
+  assert.throws(()=>f.context.uploadFinalPresentation_(f.root,[],p));
+  assert.throws(()=>f.context.uploadFinalPresentation_(f.root,[student],{...p,filename:`${student.id}_錯誤名稱.pptx`}));
+  f.addFolder(`${student.id} ${student.name}`);f.addFolder(`${student.id} ${student.name}`);
+  assert.throws(()=>f.context.uploadFinalPresentation_(f.root,[student],p));
+});
+test('期末簡報簽章綁定上傳內容，拒絕遭竄改 payload',()=>{
+  const f=fixture(),p=validateFinalPresentation(finalPayload()),timestamp=Date.now(),nonce='c'.repeat(32),secret='unit-test-only';
+  const hash=createHash('sha256').update(JSON.stringify(p)).digest('hex');
+  const signature=createHmac('sha256',secret).update([timestamp,'upload-final','',nonce,hash].join(':')).digest('hex');
+  const r={op:'upload-final',fileId:'',timestamp,nonce,payload:p,signature};
+  assert.equal(f.context.verifyRequest_({...r,payload:{...p,filename:'changed.pptx'}},secret),false);
+  assert.equal(f.context.verifyRequest_(r,secret),true);assert.equal(f.context.verifyRequest_(r,secret),false);
+});
+test('未通關不能上傳期末簡報',async()=>{
+  const r=await worker.fetch(new Request('https://example.test/api/final-presentations',{method:'POST'}),{},{waitUntil(){}});assert.equal(r.status,401);
 });
 test('Google 端獨立拒絕超限、冒用學生與重複身分資料夾',()=>{
   const f=fixture(),p=validatePresentation(payload());

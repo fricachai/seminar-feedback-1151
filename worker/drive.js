@@ -18,7 +18,7 @@ async function bridge(env, op, fileId = '', payload = null) {
   });
   if (!response.ok) throw fail(503, '暫時無法連線到 Google 雲端硬碟，請稍後再試。');
   const data = await response.json().catch(() => null);
-  if (!data?.ok) throw fail(503, op === 'upload' || op === 'upload-paper' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
+  if (!data?.ok) throw fail(503, op === 'upload' || op === 'upload-paper' || op === 'upload-final' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
   return data;
 }
 
@@ -36,10 +36,10 @@ async function withCatalogLock(env, action) {
 }
 
 function presentationStatement(env, p) {
-  return env.DB.prepare(`INSERT INTO presentations(id,student_id,filename,mime_type,byte_size,modified_at,drive_file_id,active)
-    VALUES(?,?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET filename=excluded.filename,mime_type=excluded.mime_type,
+  return env.DB.prepare(`INSERT INTO presentations(id,student_id,kind,filename,mime_type,byte_size,modified_at,drive_file_id,active)
+    VALUES(?,?,?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,filename=excluded.filename,mime_type=excluded.mime_type,
     byte_size=excluded.byte_size,modified_at=excluded.modified_at,active=1`)
-    .bind(p.id,p.studentId,p.filename,p.mimeType,p.byteSize,p.modifiedAt,p.driveFileId);
+    .bind(p.id,p.studentId,p.kind||'report',p.filename,p.mimeType,p.byteSize,p.modifiedAt,p.driveFileId);
 }
 
 function paperStatement(env, p) {
@@ -50,10 +50,10 @@ function paperStatement(env, p) {
     .bind(p.id,p.studentId,p.title,p.filename,p.byteSize,p.modifiedAt,p.titleSource,p.driveFileId);
 }
 
-async function preparePresentation(p, ids) {
+async function preparePresentation(p, ids, forcedKind) {
   const types = ['application/pdf','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
   if (!p || !ids.has(p.studentId) || !/^[A-Za-z0-9_-]{10,200}$/.test(p.driveFileId || '') || typeof p.filename !== 'string' || p.filename.length > 250 || !/\.(pptx?|pdf)$/i.test(p.filename) || !types.includes(p.mimeType) || !Number.isSafeInteger(p.byteSize) || p.byteSize < 5 || p.byteSize > 5242880 || !Number.isFinite(Date.parse(p.modifiedAt))) throw fail(502,'雲端簡報資訊不完整，未套用更新。');
-  return {...p,id:(await sha256(`${p.studentId}:${p.driveFileId}`)).slice(0,24)};
+  return {...p,kind:forcedKind || (p.kind === 'final' ? 'final' : 'report'),id:(await sha256(`${p.studentId}:${p.driveFileId}`)).slice(0,24)};
 }
 
 async function preparePaper(p, ids) {
@@ -68,12 +68,27 @@ async function preparePaper(p, ids) {
 export async function uploadPresentation(env, payload) {
   return withCatalogLock(env, async () => {
     const result = await bridge(env,'upload','',payload);
-    const p = await preparePresentation(result.presentation,new Set([payload.studentId]));
+    const p = await preparePresentation(result.presentation,new Set([payload.studentId]),'report');
     // The file already exists in Drive: indexing failure must never imply the file was not saved.
     try {
       await env.DB.batch([
         presentationStatement(env,p),
-        env.DB.prepare('UPDATE presentations SET active = 0 WHERE student_id = ? AND id <> ?').bind(p.studentId,p.id),
+        env.DB.prepare("UPDATE presentations SET active = 0 WHERE student_id = ? AND kind = 'report' AND id <> ?").bind(p.studentId,p.id),
+      ]);
+    }
+    catch { return {ok:true,indexed:false,filename:p.filename}; }
+    return {ok:true,indexed:true,filename:p.filename};
+  });
+}
+
+export async function uploadFinalPresentation(env, payload) {
+  return withCatalogLock(env, async () => {
+    const result = await bridge(env,'upload-final','',payload);
+    const p = await preparePresentation(result.presentation,new Set([payload.studentId]),'final');
+    try {
+      await env.DB.batch([
+        presentationStatement(env,p),
+        env.DB.prepare("UPDATE presentations SET active = 0 WHERE student_id = ? AND kind = 'final' AND id <> ?").bind(p.studentId,p.id),
       ]);
     }
     catch { return {ok:true,indexed:false,filename:p.filename}; }
@@ -107,11 +122,17 @@ export async function refreshCatalog(env) {
       ids.add(s.id);
     }
     if (!Array.isArray(data.presentations) || data.presentations.length > 2000) throw fail(502,'雲端簡報索引尚未就緒，未取代原有資料。');
-    const presentations = [], presentationIds = new Set();
+    if (data.finalPresentations != null && (!Array.isArray(data.finalPresentations) || data.finalPresentations.length > 2000)) throw fail(502,'雲端期末簡報索引尚未就緒，未取代原有資料。');
+    const presentations = [], finalPresentations = [], presentationIds = new Set();
     for (const item of data.presentations) {
-      const p = await preparePresentation(item,ids);
+      const p = await preparePresentation(item,ids,'report');
       if (presentationIds.has(p.id)) throw fail(502,'雲端簡報索引重複，未套用更新。');
       presentationIds.add(p.id); presentations.push(p);
+    }
+    for (const item of (data.finalPresentations || [])) {
+      const p = await preparePresentation(item,ids,'final');
+      if (presentationIds.has(p.id)) throw fail(502,'雲端期末簡報索引重複，未套用更新。');
+      presentationIds.add(p.id); finalPresentations.push(p);
     }
     const fileIds = new Set(), prepared = [];
     for (const p of data.papers) {
@@ -132,9 +153,10 @@ export async function refreshCatalog(env) {
       active=1,source_kind='drive',drive_file_id=excluded.drive_file_id`)
       .bind(p.id,p.studentId,p.title,p.filename,p.byteSize,p.modifiedAt,p.titleSource || 'student_filename',p.driveFileId));
     for (const p of presentations) statements.push(presentationStatement(env,p));
+    for (const p of finalPresentations) statements.push(presentationStatement(env,p));
     statements.push(env.DB.prepare("INSERT INTO metadata(key,value) VALUES('synced_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(syncedAt));
     await env.DB.batch(statements);
-    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
+    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,finalPresentations:finalPresentations.length,uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
   });
 }
 

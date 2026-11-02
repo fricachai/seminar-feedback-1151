@@ -4,9 +4,9 @@ const TOKEN_KEY = 'seminar-1151-session';
 const TEACHER_TOKEN_KEY = 'seminar-1151-teacher';
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_FEEDBACK_CHARS = 3000;
-const VIEWS = ['home', 'upload', 'feedback', 'received', 'teacher'];
+const VIEWS = ['home', 'upload', 'feedback', 'received', 'final', 'teacher'];
 const PAPER_NAME = /^\d{4}_.+\.pdf$/i;
-const state = { token: '', students: [], presenter: '', reviewer: '', originalContent: '', originalTakeaway: '', revision: 0, ready: false, saving: false, loading: false, uploading: false, uploadSyncing: false, paperUploadId: '', presentationUploadId: '', loadSeq: 0, uploadLookupSeq: 0, progressSeq: 0, progressController: null, receivedSeq: 0, receivedController: null, teacherToken: '', teacherLoading: false, teacherSeq: 0, controller: null, authenticatedBefore: false, view: 'home' };
+const state = { token: '', students: [], presenter: '', reviewer: '', originalContent: '', originalTakeaway: '', revision: 0, ready: false, saving: false, loading: false, uploading: false, uploadSyncing: false, paperUploadId: '', presentationUploadId: '', finalUploadId: '', finalSyncing: false, finalSeq: 0, loadSeq: 0, uploadLookupSeq: 0, progressSeq: 0, progressController: null, receivedSeq: 0, receivedController: null, teacherToken: '', teacherLoading: false, teacherSeq: 0, controller: null, authenticatedBefore: false, view: 'home' };
 try { state.token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch { /* Private browsing may restrict storage; the in-memory session still works. */ }
 try { state.teacherToken = sessionStorage.getItem(TEACHER_TOKEN_KEY) || ''; } catch { /* In-memory teacher session remains available. */ }
 const dirty = () => $('suggestion').value !== state.originalContent || $('takeaway').value !== state.originalTakeaway;
@@ -82,6 +82,7 @@ function showViewNow(view) {
     if (pairIsValid() && !state.ready) loadPair();
   }
   if (view === 'upload') { renderUploadExisting(); renderProgressView(); }
+  if (view === 'final') { renderFinalExisting(); if ($('final-checker').value) renderFinalCheck(); }
   if (view === 'received') renderReceivedView();
   if (view === 'teacher') initTeacherView();
   window.scrollTo({ top: 0, behavior: 'auto' });
@@ -97,6 +98,10 @@ async function applyView(view) {
   if (state.view === 'upload' && ($('paper-file').files.length || $('presentation-file').files.length)) {
     const leave = await confirmDiscard('目前選擇的檔案尚未送出。仍要離開這個頁面嗎？返回後可繼續選擇並送出。');
     if (!leave) { history.replaceState(null, '', '#upload'); return; }
+  }
+  if (state.view === 'final' && $('final-file').files.length) {
+    const leave = await confirmDiscard('目前選擇的期末簡報尚未送出。仍要離開這個頁面嗎？返回後可繼續選擇並送出。');
+    if (!leave) { history.replaceState(null, '', '#final'); return; }
   }
   if (state.view === 'feedback' && dirty()) {
     const leave = await confirmDiscard('目前的建議或心得尚未儲存。離開後內容會清空，仍要離開這個頁面嗎？');
@@ -170,6 +175,11 @@ function updateControls() {
   $('material-submit').disabled = uploadBusy || !$('uploader').value || (!$('paper-file').files.length && !$('presentation-file').files.length);
   $('progress-student').disabled = state.loading;
   $('progress-reload').disabled = state.loading;
+  const finalBusy = state.uploading || state.loading || state.finalSyncing;
+  $('final-uploader').disabled = finalBusy;
+  $('final-file').disabled = finalBusy;
+  $('final-submit').disabled = finalBusy || !$('final-uploader').value || !$('final-file').files.length;
+  $('final-checker').disabled = state.loading || state.finalSyncing;
   $('received-student').disabled = state.loading;
   $('received-reload').disabled = state.loading;
   $('teacher-presenter').disabled = state.teacherLoading || state.loading;
@@ -269,6 +279,74 @@ function renderUploadExisting() {
   renderUploadList('presentation-existing', student, student?.presentations, p => p.filename, '尚未上傳簡報。');
 }
 
+function finalPresentationFileError(file) {
+  if (!file) return '請選擇期末簡報檔。';
+  if (!file.size) return '期末簡報檔案不可為空，請重新選擇檔案。';
+  if (file.size > MAX_UPLOAD_BYTES) return '檔案大小超過 5MB！請選擇 5MB 以內的期末簡報檔。';
+  if (!/\.(pptx?|pdf)$/i.test(file.name)) return '期末簡報需為 PPT、PPTX 或 PDF。';
+  return '';
+}
+
+function clearFinalFile() {
+  $('final-file').value = '';
+  $('final-filename').textContent = '尚未選擇檔案';
+  state.finalUploadId = '';
+  message('final-status', '');
+}
+
+function renderFinalExisting() {
+  const studentId = $('final-uploader').value;
+  const student = state.students.find(s => s.id === studentId);
+  if (studentId && !student && (state.loading || state.finalSyncing)) {
+    renderUploadNote('final-existing', '正在讀取雲端期末簡報…');
+    return;
+  }
+  renderUploadList('final-existing', student, student?.finalPresentations, p => p.filename, '尚未上傳期末簡報。');
+}
+
+function renderFinalCheck() {
+  const area = $('final-check-result');
+  area.replaceChildren();
+  const studentId = $('final-checker').value;
+  if (!studentId) {
+    renderUploadNote('final-check-result', '請先選擇自己的學號與姓名。');
+    return;
+  }
+  const student = state.students.find(s => s.id === studentId);
+  if (!student) {
+    renderUploadNote('final-check-result', state.loading || state.finalSyncing ? '正在讀取雲端期末簡報…' : '名單已更新，請重新選擇自己的學號與姓名。');
+    return;
+  }
+  const p = student.finalPresentations?.[0];
+  if (!p) {
+    renderUploadNote('final-check-result', '目前尚未上傳期末個人論文簡報。');
+    message('final-check-status', '已同步 Google 雲端；目前沒有期末簡報。');
+    return;
+  }
+  const card = document.createElement('article');
+  card.className = 'article-card presentation-card';
+  const heading = document.createElement('h3');
+  heading.textContent = p.filename;
+  const link = document.createElement('a');
+  link.className = 'pdf-link';
+  link.href = `${API}/api/presentations/${p.id}`;
+  const label = `下載期末簡報 ${p.filename.split('.').pop().toUpperCase()} ↓`;
+  link.textContent = label;
+  link.addEventListener('click', event => {
+    event.preventDefault();
+    downloadPresentationFile(p, link, label);
+  });
+  const meta = document.createElement('p');
+  meta.className = 'paper-size';
+  meta.textContent = `${(p.byteSize / 1024 / 1024).toFixed(2)} MB・${formatTime(p.modifiedAt, true)}`;
+  const done = document.createElement('p');
+  done.className = 'field-note success';
+  done.textContent = '期末簡報已上傳完成。';
+  card.append(heading, link, meta, done);
+  area.append(card);
+  message('final-check-status', '已同步 Google 雲端，並找到期末簡報。', 'success');
+}
+
 async function syncStudentMaterials() {
   const studentId = $('uploader').value;
   const seq = ++state.uploadLookupSeq;
@@ -301,6 +379,72 @@ async function syncStudentMaterials() {
   } finally {
     if (seq === state.uploadLookupSeq) {
       state.uploadSyncing = false;
+      updateControls();
+    }
+  }
+}
+
+async function syncFinalMaterials() {
+  const studentId = $('final-uploader').value;
+  const seq = ++state.finalSeq;
+  if (!studentId) {
+    state.finalSyncing = false;
+    message('final-lookup-status', '請選擇自己的學號與姓名。');
+    renderFinalExisting();
+    updateControls();
+    return;
+  }
+  state.finalSyncing = true;
+  updateControls();
+  message('final-lookup-status', '正在更新雲端期末簡報…');
+  try {
+    await api('/api/sync', { method: 'POST', timeoutMs: 60000 });
+    if (seq !== state.finalSeq) return;
+    await loadCatalog({ preserve: true, pair: false });
+    if (seq !== state.finalSeq) return;
+    const student = state.students.find(s => s.id === studentId);
+    if (!student) {
+      message('final-lookup-status', '雲端名單已更新，請重新選擇自己的學號與姓名。', 'error');
+      return;
+    }
+    message('final-lookup-status', `已更新雲端資料：期末簡報 ${student.finalPresentations?.length || 0} 份。`, 'success');
+  } catch (error) {
+    if (seq !== state.finalSeq) return;
+    if (authError(error)) return;
+    message('final-lookup-status', `雲端資料暫時無法更新：${error.message} 以下顯示上次同步的內容。`, 'error');
+    renderFinalExisting();
+  } finally {
+    if (seq === state.finalSeq) {
+      state.finalSyncing = false;
+      updateControls();
+    }
+  }
+}
+
+async function syncFinalCheck() {
+  const studentId = $('final-checker').value;
+  const seq = ++state.finalSeq;
+  if (!studentId) {
+    renderFinalCheck();
+    return;
+  }
+  state.finalSyncing = true;
+  updateControls();
+  message('final-check-status', '正在同步 Google 雲端期末簡報…');
+  try {
+    await api('/api/sync', { method: 'POST', timeoutMs: 60000 });
+    if (seq !== state.finalSeq) return;
+    await loadCatalog({ preserve: true, pair: false });
+    if (seq !== state.finalSeq) return;
+    renderFinalCheck();
+  } catch (error) {
+    if (seq !== state.finalSeq) return;
+    if (authError(error)) return;
+    message('final-check-status', `雲端資料暫時無法更新：${error.message} 以下顯示上次同步的結果。`, 'error');
+    renderFinalCheck();
+  } finally {
+    if (seq === state.finalSeq) {
+      state.finalSyncing = false;
       updateControls();
     }
   }
@@ -348,6 +492,26 @@ function renderArticles() {
     });
     const size = document.createElement('p'); size.className = 'paper-size'; size.textContent = `${(paper.byteSize / 1024 / 1024).toFixed(2)} MB・供課堂閱讀與討論使用`;
     card.append(type, heading, link, size); area.append(card);
+  }
+}
+
+async function downloadPresentationFile(p, link, label) {
+  if (link.getAttribute('aria-disabled') === 'true') return;
+  link.setAttribute('aria-disabled', 'true');
+  link.textContent = '正在準備簡報…';
+  try {
+    const response = await api(`/api/presentations/${p.id}`, { binary: true, timeoutMs: 60000 });
+    const blob = await response.blob();
+    if (blob.type.split(';')[0] !== p.mimeType) throw new Error('檔案格式不符，請重新整理後再試。');
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = p.filename; a.hidden = true;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    if (!authError(error)) globalStatus(`下載失敗：${error.message}`);
+  } finally {
+    link.removeAttribute('aria-disabled');
+    link.textContent = label;
   }
 }
 
@@ -660,12 +824,13 @@ async function loadCatalog({ preserve = false, pair = true } = {}) {
   const oldPresenter = state.presenter, oldReviewer = state.reviewer, oldUploader = $('uploader').value;
   const oldProgress = $('progress-student').value;
   const oldReceived = $('received-student').value, oldTeacherPresenter = $('teacher-presenter').value;
+  const oldFinalUploader = $('final-uploader').value, oldFinalChecker = $('final-checker').value;
   updateControls();
   globalStatus();
   try {
     const data = await api('/api/catalog');
     state.students = data.students;
-    for (const [id, hint] of [['presenter', '請選擇報告者的學號與姓名'], ['reviewer', '請選擇填寫者的學號與姓名'], ['uploader','請選擇自己的學號與姓名'], ['progress-student','請選擇自己的學號與姓名'], ['received-student','請選擇自己的學號與姓名'], ['teacher-presenter','請選擇報告者的學號與姓名']]) {
+    for (const [id, hint] of [['presenter', '請選擇報告者的學號與姓名'], ['reviewer', '請選擇填寫者的學號與姓名'], ['uploader','請選擇自己的學號與姓名'], ['progress-student','請選擇自己的學號與姓名'], ['received-student','請選擇自己的學號與姓名'], ['final-uploader','請選擇自己的學號與姓名'], ['final-checker','請選擇自己的學號與姓名'], ['teacher-presenter','請選擇報告者的學號與姓名']]) {
       $(id).replaceChildren(new Option(hint, ''));
       for (const student of data.students) $(id).add(new Option(`${student.id} ${student.name}`, student.id));
     }
@@ -677,12 +842,19 @@ async function loadCatalog({ preserve = false, pair = true } = {}) {
     $('uploader').value = nextUploader;
     $('progress-student').value = data.students.some(s => s.id === oldProgress) ? oldProgress : '';
     $('received-student').value = data.students.some(s => s.id === oldReceived) ? oldReceived : '';
+    const nextFinalUploader = data.students.some(s => s.id === oldFinalUploader) ? oldFinalUploader : '';
+    if (nextFinalUploader !== oldFinalUploader) clearFinalFile();
+    $('final-uploader').value = nextFinalUploader;
+    $('final-checker').value = data.students.some(s => s.id === oldFinalChecker) ? oldFinalChecker : '';
     $('teacher-presenter').value = data.students.some(s => s.id === oldTeacherPresenter) ? oldTeacherPresenter : '';
     const uploaded = data.students.filter(s => s.papers.length).length;
     const slidesUploaded = data.students.filter(s=>s.presentations?.length).length;
-    $('catalog-status').textContent = `共 ${data.students.length} 位同學・文章 ${uploaded} 位・簡報 ${slidesUploaded} 位${data.syncedAt ? `・更新 ${formatTime(data.syncedAt, true)}` : ''}`;
+    const finalsUploaded = data.students.filter(s=>s.finalPresentations?.length).length;
+    $('catalog-status').textContent = `共 ${data.students.length} 位同學・文章 ${uploaded} 位・簡報 ${slidesUploaded} 位・期末簡報 ${finalsUploaded} 位${data.syncedAt ? `・更新 ${formatTime(data.syncedAt, true)}` : ''}`;
     renderArticles();
     renderUploadExisting();
+    renderFinalExisting();
+    if ($('final-checker').value) renderFinalCheck();
     if (pair && (!preserve || state.presenter !== oldPresenter || state.reviewer !== oldReviewer)) await loadPair();
   } finally { state.loading = false; updateControls(); }
 }
@@ -931,13 +1103,78 @@ $('material-form').addEventListener('submit', async event => {
   }
 });
 
+$('final-file').addEventListener('change', () => {
+  state.finalUploadId = crypto.randomUUID();
+  const file = $('final-file').files[0];
+  $('final-filename').textContent = file?.name || '尚未選擇檔案';
+  const error = finalPresentationFileError(file);
+  if (error) {
+    message('final-status', error, 'error');
+    $('final-file').value = '';
+    $('final-filename').textContent = '請重新選擇檔案';
+    state.finalUploadId = '';
+  } else message('final-status', '送出後會自動以學號命名，並存入「學號 姓名」資料夾。');
+  updateControls();
+});
+
+$('final-uploader').addEventListener('change', async () => {
+  clearFinalFile();
+  message('final-material-status', '已更新身分，正在更新雲端期末簡報…');
+  renderFinalExisting();
+  await syncFinalMaterials();
+  message('final-material-status', '可選擇期末簡報檔送出；再次上傳會覆蓋先前檔案。');
+});
+
+$('final-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if ($('final-submit').disabled || state.uploading || state.finalSyncing) return;
+  const studentId = $('final-uploader').value;
+  const file = $('final-file').files[0];
+  if (!studentId) { message('final-material-status', '請先選擇自己的學號與姓名。', 'error'); return; }
+  const error = finalPresentationFileError(file);
+  if (error) { message('final-status', error, 'error'); message('final-material-status', '請依上方提示選擇檔案後再送出。', 'error'); return; }
+  state.uploading = true;
+  updateControls();
+  const button = $('final-submit');
+  button.textContent = '上傳中…';
+  message('final-material-status', '正在儲存期末簡報至 Google 雲端硬碟，請勿關閉頁面…');
+  try {
+    const data = await readBase64(file);
+    let uploadId = state.finalUploadId;
+    if (!uploadId) { uploadId = crypto.randomUUID(); state.finalUploadId = uploadId; }
+    const result = await api('/api/final-presentations', {
+      method: 'POST',
+      body: JSON.stringify({ studentId, filename: file.name, data, uploadId }),
+      timeoutMs: 65000,
+    });
+    clearFinalFile();
+    message('final-status', `已儲存 ${result.filename}。${result.indexed ? '' : '期末簡報清單尚未更新，請稍後按「確認期末簡報」重新同步。'}`, 'success');
+    message('final-material-status', '期末簡報已送出。', 'success');
+    try { await loadCatalog({ preserve: true, pair: false }); }
+    catch { message('final-material-status', '期末簡報已送出，但畫面清單尚未更新；請稍後重新選擇身分或按「確認期末簡報」。', 'error'); }
+    renderFinalExisting();
+  } catch (error) {
+    message('final-status', error.message, 'error');
+    if (authError(error)) message('final-material-status', '課程連線已到期，請重新輸入通關碼。', 'error');
+  } finally {
+    state.uploading = false;
+    button.innerHTML = '送出 <span aria-hidden="true">→</span>';
+    updateControls();
+  }
+});
+
+$('final-checker').addEventListener('change', () => {
+  renderFinalCheck();
+  syncFinalCheck();
+});
+
 $('logout').addEventListener('click', async () => {
-  const hasMaterials = $('paper-file').files.length || $('presentation-file').files.length;
+  const hasMaterials = $('paper-file').files.length || $('presentation-file').files.length || $('final-file').files.length;
   const prompt = hasMaterials && !dirty()
     ? '目前選擇的檔案尚未送出。選擇放棄後會離開課程，需要時請重新選擇檔案。'
     : '建議或心得尚未儲存。返回後可先完成儲存；選擇放棄修改，才會離開課程。';
   if ((dirty() || hasMaterials) && !await confirmDiscard(prompt)) return;
-  state.controller?.abort(); state.loadSeq++; state.uploadLookupSeq++; state.progressSeq++; state.receivedSeq++; state.teacherSeq++;
+  state.controller?.abort(); state.loadSeq++; state.uploadLookupSeq++; state.finalSeq++; state.progressSeq++; state.receivedSeq++; state.teacherSeq++;
   state.progressController?.abort(); state.receivedController?.abort();
   let logoutFailed = false;
   if (state.teacherToken) {
@@ -955,6 +1192,12 @@ $('logout').addEventListener('click', async () => {
   $('progress-list').replaceChildren();
   $('received-student').replaceChildren(new Option('請選擇自己的學號與姓名',''));
   $('received-text').value = ''; $('received-count').textContent = '';
+  $('final-uploader').replaceChildren(new Option('請選擇自己的學號與姓名',''));
+  $('final-checker').replaceChildren(new Option('請選擇自己的學號與姓名',''));
+  $('final-check-result').replaceChildren();
+  $('final-check-status').textContent = '選擇身分後，會同步 Google 雲端資料夾並確認期末簡報。';
+  $('final-lookup-status').textContent = '選擇身分後，會自動更新雲端期末簡報。';
+  clearFinalFile();
   $('teacher-presenter').replaceChildren(new Option('請選擇報告者的學號與姓名',''));
   $('teacher-feedback').replaceChildren();
   showTeacherLogin('請輸入教師帳號與密碼。');
@@ -966,7 +1209,7 @@ $('logout').addEventListener('click', async () => {
   $('class-code').focus();
 });
 
-addEventListener('beforeunload', event => { if (dirty() || state.saving || state.uploading) { event.preventDefault(); event.returnValue = ''; } });
+addEventListener('beforeunload', event => { if (dirty() || state.saving || state.uploading || $('final-file').files.length) { event.preventDefault(); event.returnValue = ''; } });
 
 if (state.token) {
   message('login-status', '正在恢復課程連線…');

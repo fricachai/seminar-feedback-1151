@@ -31,9 +31,10 @@
 - 填寫進度空狀態重複提示移除：前端 commit `5d4e3150831a68a6b7cc376c7a64c2301ab02c2d`，Pages workflow `40638096548` 成功；前端資源快取版本 `1.7.1`，正式站 `app.js` 已確認該句只保留一處。
 - Obsidian 知識回寫（2026-10-28）：可重用工程規則已補入 `Codex操作累積/Google表單-AppsScript建立與跳題SOP.md` 的 2026-10-28 節，並更新 `Codex操作累積/跨專案長期記憶中樞.md` 檢索入口。三項 ChatGPT Project 寫作檔 `codex-operation-memory.md`、`Ver25.md`、`chatgpt-project-instructions.md` 判定 `MAINTAIN`，未替換、未上傳；`ProjectSourcesReplaced=NOT_PERFORMED`。
 - 「查看給我的建議」改為每次請求隨機排序：Worker 以 Fisher-Yates 洗牌，不再依 `updated_at`／`reviewer_id` 固定順序；只改變顯示順序，仍只回傳建議文字、不帶填寫者資訊。Worker `1.8.0`，版本 ID `2bd51ec9-5d36-474f-8953-813f2880f8f0`，commit `bbba744`；新增 `shuffled()` 單元測試，本機 37／37 通過，正式 `/api/health` 已回 `1.8.0`。
+- 新增 04「期末個人論文簡報」：首頁新增入口與獨立檢視；上方 01 上傳期末簡報（PPT／PPTX／PDF、5 MB、固定命名「學號_期末個人論文簡報.副檔名」、重傳只汰換期末檔），下方 02 選擇身分後同步 Google 雲端並列出檔名、大小、時間、下載按鈕與「期末簡報已上傳完成」。D1 `presentations` 新增 `kind`（report／final），Worker 與 Apps Script 分流，不影響既有報告簡報與文章。Worker `1.9.0`；Apps Script 橋接版本 8（新增 `upload-final` 與 `finalPresentations`）。
 - 教師管理 `Failed to fetch` 根因已修正：Worker CORS `Access-Control-Allow-Headers` 加入 `X-Teacher-Token`；正式預檢回 `Content-Type, Authorization, X-Teacher-Token`。
 - 正式站 `index.html`、`app.js`、`config.js`、`favicon.svg` SHA-256 與提交一致；`styles.css` 僅結尾 CRLF／LF 差異，內容相同。
-- 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **36／36 通過**，含建議／心得雙欄、只填一欄被拒、3,000 字邊界、公開讀取不含內容、查看建議匿名性、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換。
+- 本機 `npm run check` 通過；`SEMINAR_TEST_SKIP_SYNC=1 npm test` **43／43 通過**，含建議／心得雙欄、只填一欄被拒、3,000 字邊界、公開讀取不含內容、查看建議匿名性與隨機排序、填寫進度、教師登入／登出、CORS 教師標頭、上傳覆蓋與格式汰換、期末簡報命名／容量／分流／重傳。
 - 以假資料瀏覽器實測：首頁 03、雙欄空白開始／儲存／覆蓋、查看建議空行合併、填寫進度僅完成項目、教師登入／管理／登出；正式站結構讀回 03、雙欄、教師按鈕、進度區塊與教師登入表單，無水平溢位。
 - 教師已由使用者完成帳密設定並登入教師管理；本輪未讀取或記錄任何憑證。教師 API 的 `X-Teacher-Token` CORS 問題已修正。
 

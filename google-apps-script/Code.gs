@@ -16,6 +16,7 @@ function doPost(e) {
     var students = roster_(props.getProperty('ROSTER_FILE_ID'), root.getId());
     if (request.op === 'catalog') return output_(catalog_(root, students));
     if (request.op === 'upload') return output_(uploadPresentation_(root,students,request.payload));
+    if (request.op === 'upload-final') return output_(uploadFinalPresentation_(root,students,request.payload));
     if (request.op === 'upload-paper') return output_(uploadPaper_(root,students,request.payload));
     if (request.op === 'pdf' || request.op === 'presentation') {
       var file = DriveApp.getFileById(request.fileId);
@@ -27,7 +28,7 @@ function doPost(e) {
         var grandParents = parent.getParents();
         while (grandParents.hasNext()) if (grandParents.next().getId() === root.getId()) permitted = true;
       }
-      var presentation = isPresentation_(file);
+      var presentation = isPresentation_(file) || isFinalPresentation_(file);
       var isSlides = request.op === 'presentation';
       if (!permitted || file.isTrashed() || (isSlides ? !presentation : presentation || file.getMimeType() !== MimeType.PDF) || file.getSize() > (isSlides ? 5242880 : 10485760)) throw new Error('File not permitted.');
       var bytes = file.getBlob().getBytes();
@@ -45,7 +46,7 @@ function doPost(e) {
 
 function verifyRequest_(r, secret) {
   if (!Number.isFinite(r.timestamp) || Math.abs(Date.now() - r.timestamp) > 120000 || !/^[a-f0-9]{32}$/.test(r.nonce || '') || !/^[a-f0-9]{64}$/.test(r.signature || '')) return false;
-  if ((r.op === 'upload' || r.op === 'upload-paper') && (!r.payload || typeof r.payload !== 'object')) return false;
+  if ((r.op === 'upload' || r.op === 'upload-paper' || r.op === 'upload-final') && (!r.payload || typeof r.payload !== 'object')) return false;
   var parts = [r.timestamp,r.op,r.fileId || '',r.nonce];
   if (r.payload) parts.push(hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(r.payload),Utilities.Charset.UTF_8)));
   var expected = hex_(Utilities.computeHmacSha256Signature(parts.join(':'), secret));
@@ -62,19 +63,28 @@ function hex_(bytes) { return bytes.map(function(b) { return ('0' + ((b + 256) %
 function output_(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }
 
 var PRESENTATION_PREFIX_ = 'seminar-presentation:v1:';
+var FINAL_PREFIX_ = 'seminar-final-presentation:v1:';
+var FINAL_NAME_ = '期末個人論文簡報';
 var PAPER_PREFIX_ = 'seminar-paper:v1:';
 var PRESENTATION_TYPES_ = {
   ppt:'application/vnd.ms-powerpoint',
   pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   pdf:'application/pdf'
 };
+function isFinalPresentation_(file) {
+  var ext = file.getName().match(/\.(pptx?|pdf)$/i);
+  if (!ext || file.getMimeType() !== PRESENTATION_TYPES_[ext[1].toLowerCase()]) return false;
+  var description = file.getDescription() || '';
+  return description.indexOf(FINAL_PREFIX_) === 0 ||
+    new RegExp('^\\d{8}_' + FINAL_NAME_ + '\\.(pptx?|pdf)$','i').test(file.getName());
+}
 function isPresentation_(file) {
   var ext = file.getName().match(/\.(pptx?|pdf)$/i);
-  return !!ext && file.getMimeType() === PRESENTATION_TYPES_[ext[1].toLowerCase()] &&
+  return !!ext && file.getMimeType() === PRESENTATION_TYPES_[ext[1].toLowerCase()] && !isFinalPresentation_(file) &&
     (ext[1].toLowerCase() !== 'pdf' || (file.getDescription() || '').indexOf(PRESENTATION_PREFIX_) === 0);
 }
-function presentationInfo_(file,studentId) {
-  return {driveFileId:file.getId(),studentId:studentId,filename:file.getName(),mimeType:file.getMimeType(),byteSize:file.getSize(),modifiedAt:file.getLastUpdated().toISOString()};
+function presentationInfo_(file,studentId,kind) {
+  return {driveFileId:file.getId(),studentId:studentId,kind:kind||'report',filename:file.getName(),mimeType:file.getMimeType(),byteSize:file.getSize(),modifiedAt:file.getLastUpdated().toISOString()};
 }
 function paperInfo_(file,student) {
   var title = articleTitle_(file.getName(), student);
@@ -101,7 +111,9 @@ function categoryFiles_(folder, category) {
     if (file.isTrashed()) continue;
     if (category === 'presentation') {
       if (isPresentation_(file)) list.push(file);
-    } else if (file.getMimeType() === MimeType.PDF && !isPresentation_(file)) {
+    } else if (category === 'final-presentation') {
+      if (isFinalPresentation_(file)) list.push(file);
+    } else if (file.getMimeType() === MimeType.PDF && !isPresentation_(file) && !isFinalPresentation_(file)) {
       list.push(file);
     }
   }
@@ -149,11 +161,48 @@ function uploadPresentation_(root,students,p) {
       var prior = files.next(), description = prior.getDescription() || '';
       if (!prior.isTrashed() && description.indexOf(PRESENTATION_PREFIX_ + p.uploadId + ':') === 0) {
         if (description !== marker || prior.getName() !== p.filename) throw new Error('Upload ID conflict.');
-        return {ok:true,presentation:presentationInfo_(prior,student.id)};
+        return {ok:true,presentation:presentationInfo_(prior,student.id,'report')};
       }
     }
     var target = replaceCategoryFile_(folder,'presentation',blob,p.filename,marker);
-    return {ok:true,presentation:presentationInfo_(target,student.id)};
+    return {ok:true,presentation:presentationInfo_(target,student.id,'report')};
+  } finally { lock.releaseLock(); }
+}
+function uploadFinalPresentation_(root,students,p) {
+  if (!p || !/^\d{8}$/.test(p.studentId || '') || !/^[a-f0-9-]{36}$/.test(p.uploadId || '')) throw new Error('Invalid identity.');
+  var student = students.find(function(s) {return s.id === p.studentId;});
+  var ext = String(p.filename || '').match(/\.(pptx?|pdf)$/i);
+  var expected = student && ext ? student.id + '_' + FINAL_NAME_ + '.' + ext[1].toLowerCase() : '';
+  if (!student || !ext || p.filename !== expected || p.mimeType !== PRESENTATION_TYPES_[ext[1].toLowerCase()]) throw new Error('Invalid upload.');
+  if (typeof p.data !== 'string' || p.data.length > 6990508 || p.data.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(p.data)) throw new Error('Invalid size.');
+  var bytes = Utilities.base64Decode(p.data);
+  if (bytes.length < 5 || bytes.length > 5242880 || bytes.length !== p.byteSize) throw new Error('Invalid size.');
+  var signature = bytes.slice(0,8).map(function(b) {return (b+256)%256;});
+  var extension = ext[1].toLowerCase();
+  if (extension === 'pdf' && String.fromCharCode.apply(null,signature.slice(0,5)) !== '%PDF-') throw new Error('Invalid PDF.');
+  if (extension === 'ppt' && JSON.stringify(signature) !== '[208,207,17,224,161,177,26,225]') throw new Error('Invalid PPT.');
+  var blob = Utilities.newBlob(bytes,p.mimeType,p.filename);
+  if (extension === 'pptx') {
+    if (signature[0] !== 80 || signature[1] !== 75 || signature[2] !== 3 || signature[3] !== 4) throw new Error('Invalid PPTX.');
+    var entries = Utilities.unzip(blob.copyBlob().setContentType('application/zip'));
+    if (!entries.some(function(e){return e.getName() === 'ppt/presentation.xml';}) || !entries.some(function(e){return e.getName() === '[Content_Types].xml';})) throw new Error('Invalid PPTX.');
+  }
+  var hash = hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes));
+  var marker = FINAL_PREFIX_ + p.uploadId + ':' + hash;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw new Error('Upload busy.');
+  try {
+    var folder = studentFolder_(root,student);
+    var files = folder.getFiles();
+    while (files.hasNext()) {
+      var prior = files.next(), description = prior.getDescription() || '';
+      if (!prior.isTrashed() && description.indexOf(FINAL_PREFIX_ + p.uploadId + ':') === 0) {
+        if (description !== marker || prior.getName() !== p.filename) throw new Error('Upload ID conflict.');
+        return {ok:true,presentation:presentationInfo_(prior,student.id,'final')};
+      }
+    }
+    var target = replaceCategoryFile_(folder,'final-presentation',blob,p.filename,marker);
+    return {ok:true,presentation:presentationInfo_(target,student.id,'final')};
   } finally { lock.releaseLock(); }
 }
 function uploadPaper_(root,students,p) {
@@ -246,7 +295,7 @@ function articleTitle_(filename, student) {
 }
 
 function catalog_(root, students) {
-  var folders = root.getFolders(), papers = [], presentations = [];
+  var folders = root.getFolders(), papers = [], presentations = [], finalPresentations = [];
   while (folders.hasNext()) {
     var folder = folders.next(), identity = folder.getName().match(/^(\d{8})\s+(.+)$/);
     if (!identity) continue;
@@ -256,8 +305,12 @@ function catalog_(root, students) {
     while (files.hasNext()) {
       var file = files.next();
       if (file.isTrashed()) continue;
+      if (isFinalPresentation_(file)) {
+        if (file.getSize() > 0 && file.getSize() <= 5242880) finalPresentations.push(presentationInfo_(file,student.id,'final'));
+        continue;
+      }
       if (isPresentation_(file)) {
-        if (file.getSize() > 0 && file.getSize() <= 5242880) presentations.push(presentationInfo_(file,student.id));
+        if (file.getSize() > 0 && file.getSize() <= 5242880) presentations.push(presentationInfo_(file,student.id,'report'));
         continue;
       }
       if (file.getMimeType() !== MimeType.PDF) continue;
@@ -265,7 +318,7 @@ function catalog_(root, students) {
       papers.push(paperInfo_(file,student));
     }
   }
-  return {ok:true, complete:true, students:students, papers:papers, presentations:presentations, fetchedAt:new Date().toISOString()};
+  return {ok:true, complete:true, students:students, papers:papers, presentations:presentations, finalPresentations:finalPresentations, fetchedAt:new Date().toISOString()};
 }
 
 function authorizeBridge() {

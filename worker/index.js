@@ -1,5 +1,6 @@
-import { refreshCatalog, readDrivePdf, uploadPresentation, uploadPaper, readDrivePresentation } from './drive.js';
+import { refreshCatalog, readDrivePdf, uploadPresentation, uploadPaper, uploadFinalPresentation, readDrivePresentation } from './drive.js';
 import { validatePresentation, MAX_PRESENTATION_BYTES } from './presentations.js';
+import { validateFinalPresentation } from './final-presentations.js';
 import { validatePaper, MAX_PAPER_BYTES } from './papers.js';
 const encoder = new TextEncoder();
 const SESSION_SECONDS = 12 * 60 * 60;
@@ -246,7 +247,7 @@ async function teacherFeedback(env, presenter) {
 async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.8.0' });
+  if (path === '/api/health' && request.method === 'GET') return json({ ok: true, service: 'seminar-feedback', version: '1.9.0' });
   if (path === '/api/session' && request.method === 'POST') return login(request, env, ctx);
   // No public asset fallback: raw hashes, directory paths, and all PDF URLs require authentication.
   if (!path.startsWith('/api/')) throw httpError(404, '找不到此頁面。');
@@ -280,8 +281,14 @@ async function route(request, env, ctx) {
     if (!student) throw httpError(400,'學生資料已更新，請重新整理名單。');
     return json(await uploadPresentation(env,payload));
   }
+  if (path === '/api/final-presentations' && request.method === 'POST') {
+    const payload = validateFinalPresentation(await bodyJSON(request, Math.ceil(MAX_PRESENTATION_BYTES / 3) * 4 + 4096));
+    const student = await env.DB.prepare('SELECT id FROM students WHERE active = 1 AND id = ?').bind(payload.studentId).first();
+    if (!student) throw httpError(400,'學生資料已更新，請重新整理名單。');
+    return json(await uploadFinalPresentation(env,payload));
+  }
   if (path === '/api/catalog' && request.method === 'GET') {
-    const [students, papers, synced, presentations] = await env.DB.batch([
+    const [students, papers, synced, presentations, finalPresentations] = await env.DB.batch([
       env.DB.prepare('SELECT id, name FROM students WHERE active = 1 ORDER BY id'),
       env.DB.prepare(`SELECT p.id, p.student_id AS studentId, p.title, p.filename, p.byte_size AS byteSize,
         p.modified_at AS modifiedAt FROM papers p JOIN students s ON s.id = p.student_id
@@ -289,10 +296,13 @@ async function route(request, env, ctx) {
       env.DB.prepare("SELECT value FROM metadata WHERE key = 'synced_at'"),
       env.DB.prepare(`SELECT p.id, p.student_id AS studentId, p.filename, p.mime_type AS mimeType, p.byte_size AS byteSize,
         p.modified_at AS modifiedAt FROM presentations p JOIN students s ON s.id = p.student_id
-        WHERE p.active = 1 AND s.active = 1 ORDER BY p.modified_at DESC, p.id DESC`),
+        WHERE p.active = 1 AND p.kind = 'report' AND s.active = 1 ORDER BY p.modified_at DESC, p.id DESC`),
+      env.DB.prepare(`SELECT p.id, p.student_id AS studentId, p.filename, p.mime_type AS mimeType, p.byte_size AS byteSize,
+        p.modified_at AS modifiedAt FROM presentations p JOIN students s ON s.id = p.student_id
+        WHERE p.active = 1 AND p.kind = 'final' AND s.active = 1 ORDER BY p.modified_at DESC, p.id DESC`),
     ]);
     return json({
-      students: students.results.map(s => ({ ...s, papers: papers.results.filter(p => p.studentId === s.id), presentations: presentations.results.filter(p => p.studentId === s.id) })),
+      students: students.results.map(s => ({ ...s, papers: papers.results.filter(p => p.studentId === s.id), presentations: presentations.results.filter(p => p.studentId === s.id), finalPresentations: finalPresentations.results.filter(p => p.studentId === s.id) })),
       syncedAt: synced.results[0]?.value || null,
     });
   }

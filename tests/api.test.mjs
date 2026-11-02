@@ -67,6 +67,7 @@ test('名單與來源一致，未上傳學生的文章陣列為空',async()=>{
  const actualHash=hash(JSON.stringify(actual.map(({id,name})=>({id,name}))));
  assert.equal(actualHash,hash(JSON.stringify(manifest.students)));
  assert.equal(actual.filter(s=>s.papers.length).length,6);assert.equal(actual.filter(s=>!s.papers.length).length,29);
+ assert.ok(data.students.every(s=>Array.isArray(s.presentations)&&Array.isArray(s.finalPresentations)));
  assert.equal(r.headers.get('cache-control'),'no-store, private');
 });
 test('新增建議可以儲存，公開讀取只回傳是否存在，不帶出建議內容',async()=>{
