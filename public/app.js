@@ -411,6 +411,7 @@ async function syncFinalMaterials() {
   } catch (error) {
     if (seq !== state.finalSeq) return;
     if (authError(error)) return;
+    state.finalSyncing = false;
     message('final-lookup-status', `雲端資料暫時無法更新：${error.message} 以下顯示上次同步的內容。`, 'error');
     renderFinalExisting();
   } finally {
@@ -440,6 +441,7 @@ async function syncFinalCheck() {
   } catch (error) {
     if (seq !== state.finalSeq) return;
     if (authError(error)) return;
+    state.finalSyncing = false;
     message('final-check-status', `雲端資料暫時無法更新：${error.message} 以下顯示上次同步的結果。`, 'error');
     renderFinalCheck();
   } finally {
