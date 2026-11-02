@@ -65,6 +65,7 @@ function output_(data) { return ContentService.createTextOutput(JSON.stringify(d
 var PRESENTATION_PREFIX_ = 'seminar-presentation:v1:';
 var FINAL_PREFIX_ = 'seminar-final-presentation:v1:';
 var FINAL_NAME_ = '期末個人論文簡報';
+var BRIDGE_VERSION_ = 8;
 var PAPER_PREFIX_ = 'seminar-paper:v1:';
 var PRESENTATION_TYPES_ = {
   ppt:'application/vnd.ms-powerpoint',
@@ -318,7 +319,7 @@ function catalog_(root, students) {
       papers.push(paperInfo_(file,student));
     }
   }
-  return {ok:true, complete:true, students:students, papers:papers, presentations:presentations, finalPresentations:finalPresentations, fetchedAt:new Date().toISOString()};
+  return {ok:true, complete:true, bridgeVersion:BRIDGE_VERSION_, students:students, papers:papers, presentations:presentations, finalPresentations:finalPresentations, fetchedAt:new Date().toISOString()};
 }
 
 function authorizeBridge() {

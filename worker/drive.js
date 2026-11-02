@@ -18,7 +18,10 @@ async function bridge(env, op, fileId = '', payload = null) {
   });
   if (!response.ok) throw fail(503, '暫時無法連線到 Google 雲端硬碟，請稍後再試。');
   const data = await response.json().catch(() => null);
-  if (!data?.ok) throw fail(503, op === 'upload' || op === 'upload-paper' || op === 'upload-final' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
+  if (!data?.ok) {
+    if (op === 'upload-final' && data?.error === 'Unsupported operation.') throw fail(503, '雲端橋接尚未更新到支援期末簡報的版本，請老師重新部署 Apps Script 版本 8。');
+    throw fail(503, op === 'upload' || op === 'upload-paper' || op === 'upload-final' ? '尚未確認雲端儲存結果，請保留選取的檔案並重試；相同上傳不會重複建立。' : 'Google 雲端硬碟暫時無法讀取，原有資料與建議均已保留。');
+  }
   return data;
 }
 
@@ -156,7 +159,7 @@ export async function refreshCatalog(env) {
     for (const p of finalPresentations) statements.push(presentationStatement(env,p));
     statements.push(env.DB.prepare("INSERT INTO metadata(key,value) VALUES('synced_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(syncedAt));
     await env.DB.batch(statements);
-    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,finalPresentations:finalPresentations.length,uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
+    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,finalPresentations:finalPresentations.length,bridgeVersion:Number.isInteger(data.bridgeVersion)?data.bridgeVersion:null,uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
   });
 }
 

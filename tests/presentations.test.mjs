@@ -103,6 +103,7 @@ test('期末簡報與報告簡報分流，重傳只汰換期末檔',()=>{
   const retried=f.context.uploadFinalPresentation_(f.root,[student],first);
   assert.equal(uploaded.presentation.driveFileId,retried.presentation.driveFileId);
   const mixed=f.context.catalog_(f.root,[student]);
+  assert.equal(mixed.bridgeVersion,8);
   assert.equal(mixed.papers.length,0);assert.equal(mixed.presentations.length,1);assert.equal(mixed.finalPresentations.length,1);
   assert.equal(mixed.finalPresentations[0].filename,`${student.id}_${FINAL_PRESENTATION_NAME}.pptx`);
   assert.equal(folder.files.filter(file=>!file.trashed).length,2);

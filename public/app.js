@@ -1157,6 +1157,7 @@ $('final-form').addEventListener('submit', async event => {
     renderFinalExisting();
   } catch (error) {
     message('final-status', error.message, 'error');
+    message('final-material-status', `期末簡報尚未送出：${error.message}`, 'error');
     if (authError(error)) message('final-material-status', '課程連線已到期，請重新輸入通關碼。', 'error');
   } finally {
     state.uploading = false;
