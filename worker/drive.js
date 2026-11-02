@@ -159,7 +159,7 @@ export async function refreshCatalog(env) {
     for (const p of finalPresentations) statements.push(presentationStatement(env,p));
     statements.push(env.DB.prepare("INSERT INTO metadata(key,value) VALUES('synced_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(syncedAt));
     await env.DB.batch(statements);
-    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,finalPresentations:finalPresentations.length,bridgeVersion:Number.isInteger(data.bridgeVersion)?data.bridgeVersion:null,uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
+    return {ok:true,syncedAt,students:data.students.length,papers:prepared.length,presentations:presentations.length,finalPresentations:finalPresentations.length,bridgeVersion:Number.isInteger(data.bridgeVersion)?data.bridgeVersion:null,bridgeHasFinal:Array.isArray(data.finalPresentations),uploadedStudents:new Set(prepared.map(p=>p.studentId)).size,newPapers:prepared.filter(p=>!old.has(p.id)).length};
   });
 }
 
