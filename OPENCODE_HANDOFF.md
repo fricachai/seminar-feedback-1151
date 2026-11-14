@@ -157,3 +157,14 @@
 ## 檢索
 
 本次完整檢索與更正紀錄見 `task_retrieval.md`。續作已重新讀取 Obsidian「股票即時報價Dashboard設計與部署踩坑SOP」之 commit／push 與正式網站檔案確認段落；只採用通用發布驗證，不採用股票業務規則。來源權威以當次使用者更正與現行實作為準。
+
+## 2026-11-14 介面視覺更新（前端 1.9.4）
+
+- 變更內容：`public/styles.css` 新增一層設計覆寫（暖白紙面／墨綠細線／霧金索引）；依使用者回饋把圓角改回 **12px**（對話框 16px、控制項 8px），並**移除卡片與面板上緣的深色線**（改為統一 1px 細邊框）。**未變更任何 HTML 結構與 JS**。
+- 提交：`6811aa1`（1.9.3 首版）、`1fb8767`（移除上緣深色線，1.9.4）。
+- 已部署：**GitHub Pages 已發布**。線上實測：`index.html` 三個 `?v=1.9.4`（1.9.3 殘留 0）、`styles.css` 含設計層與圓角層、`border-top:2px solid var(--ink)` 剩餘 0。
+- **未完成：Cloudflare Worker 未部署。** 原因：`wrangler` 未登入，非互動環境缺 `CLOUDFLARE_API_TOKEN`（`wrangler whoami` → not authenticated）。`/api/health` 仍回 1.9.2，**僅版本字串差異，功能不受影響**。待使用者在互動終端 `npx wrangler login` 後執行 `npm run deploy`。
+- 驗證：`npm run check` PASS；`node scripts/audit-release.mjs` → `passed:true, findings:0`；本機以真實通關碼登入實測（gate→classroom、下拉 36 選項、1440 無水平溢位）；CSS 計算樣式確認 `.home-card`／`.panel` 上緣為 `0.89px rgb(220,216,200)`、圓角 12px。
+- 未驗證（`NOT_VERIFIED`）：手機 390 與回饋頁／期末頁／教師頁／對話框的逐頁截圖；`npm test` 未跑（本次未動後端）。
+- 回退：`git revert 1fb8767`（或 `git checkout da0ecc6 -- public/styles.css`）。
+- 同步：Skill `seminar-feedback-site` 的版本指紋已更新為 1.9.4，OpenCode 與 Codex 兩份雜湊一致（`07E180A6BB92A15B…`）。
